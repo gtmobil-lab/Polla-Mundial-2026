@@ -1215,11 +1215,12 @@ function updateUserPill() {
 }
 
 // ====== ADMIN PIN ======
-const ADMIN_PIN_KEY = "mw26_admin_v1";
+// Para cambiar el PIN: reemplaza el valor de ADMIN_PIN_HASH
+// con btoa("TU_NUEVO_PIN") en la consola del navegador.
+// Ejemplo: btoa("5678") → "NTY3OA=="
+const ADMIN_PIN_HASH = "NTY3OA==";
 
 function renderAdminCard() {
-  const pinSet = !!localStorage.getItem(ADMIN_PIN_KEY);
-
   if (APP.adminMode) {
     return `
       <div style="background:linear-gradient(135deg,rgba(214,40,40,0.08),var(--bg-card));border:1px solid rgba(214,40,40,0.3);border-radius:12px;padding:14px;margin-bottom:12px;">
@@ -1235,49 +1236,19 @@ function renderAdminCard() {
       </div>`;
   }
 
-  if (!pinSet) {
-    return `
-      <div style="background:var(--bg-card);border:1px solid var(--line);border-radius:12px;padding:14px;margin-bottom:12px;">
-        <div style="font-weight:700;font-size:14px;margin-bottom:4px;">Modo administrador</div>
-        <div style="font-size:11px;color:var(--text-dim);margin-bottom:12px;">Configura un PIN para registrar resultados. Solo quien lo sepa podrá activarlo.</div>
-        <input type="password" id="admin-pin-new" placeholder="Nuevo PIN (mín. 4 dígitos)"
-          style="width:100%;background:var(--bg-app);border:1px solid var(--line-2);border-radius:8px;padding:10px 12px;font-size:14px;margin-bottom:8px;">
-        <input type="password" id="admin-pin-confirm" placeholder="Confirmar PIN"
-          style="width:100%;background:var(--bg-app);border:1px solid var(--line-2);border-radius:8px;padding:10px 12px;font-size:14px;margin-bottom:10px;">
-        <button class="btn-primary" style="width:100%;" onclick="tryEnableAdmin()">Configurar PIN y activar</button>
-      </div>`;
-  }
-
   return `
     <div style="background:var(--bg-card);border:1px solid var(--line);border-radius:12px;padding:14px;margin-bottom:12px;">
       <div style="font-weight:700;font-size:14px;margin-bottom:4px;">Modo administrador</div>
-      <div style="font-size:11px;color:var(--text-dim);margin-bottom:12px;">Ingresa el PIN para registrar resultados oficiales</div>
+      <div style="font-size:11px;color:var(--text-dim);margin-bottom:10px;">Ingresa el PIN para registrar resultados oficiales</div>
       <input type="password" id="admin-pin-input" placeholder="PIN de administrador"
         style="width:100%;background:var(--bg-app);border:1px solid var(--line-2);border-radius:8px;padding:10px 12px;font-size:14px;margin-bottom:10px;">
       <button class="btn-primary" style="width:100%;" onclick="tryEnableAdmin()">Activar</button>
-      <button style="width:100%;margin-top:8px;padding:8px;font-size:11px;color:var(--text-dim);text-align:center;" onclick="resetAdminPin()">Restablecer PIN</button>
     </div>`;
 }
 
 function tryEnableAdmin() {
-  const pinSet = !!localStorage.getItem(ADMIN_PIN_KEY);
-
-  if (!pinSet) {
-    const newPin     = (document.getElementById("admin-pin-new")?.value     || "").trim();
-    const confirmPin = (document.getElementById("admin-pin-confirm")?.value || "").trim();
-    if (newPin.length < 4)     { toast("El PIN debe tener al menos 4 caracteres", "error"); return; }
-    if (newPin !== confirmPin) { toast("Los PINs no coinciden", "error"); return; }
-    localStorage.setItem(ADMIN_PIN_KEY, btoa(unescape(encodeURIComponent(newPin))));
-    APP.adminMode = true;
-    save();
-    toast("PIN configurado · Modo admin activado", "success");
-    renderSettings();
-    return;
-  }
-
-  const pin    = (document.getElementById("admin-pin-input")?.value || "").trim();
-  const stored = localStorage.getItem(ADMIN_PIN_KEY);
-  if (!pin || btoa(unescape(encodeURIComponent(pin))) !== stored) {
+  const pin = (document.getElementById("admin-pin-input")?.value || "").trim();
+  if (!pin || btoa(unescape(encodeURIComponent(pin))) !== ADMIN_PIN_HASH) {
     toast("PIN incorrecto", "error"); return;
   }
   APP.adminMode = true;
@@ -1293,18 +1264,8 @@ function disableAdmin() {
   renderSettings();
 }
 
-function resetAdminPin() {
-  if (!confirm("¿Resetear el PIN de administrador? Tendrás que configurar uno nuevo.")) return;
-  localStorage.removeItem(ADMIN_PIN_KEY);
-  APP.adminMode = false;
-  save();
-  toast("PIN reseteado");
-  renderSettings();
-}
-
 window.tryEnableAdmin = tryEnableAdmin;
 window.disableAdmin   = disableAdmin;
-window.resetAdminPin  = resetAdminPin;
 
 // ====== AJUSTES ======
 function renderSettings() {
