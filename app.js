@@ -547,7 +547,9 @@ function renderKO(stageId) {
 }
 
 // ====== MATCH CARD HTML ======
-function matchCardHTML(m) {
+// opts.showPred  = true → muestra zona de predicciones (grupos y fases KO)
+// opts.showAdmin = true → muestra zona de resultados admin (calendario)
+function matchCardHTML(m, opts = { showPred: true, showAdmin: false }) {
   const home = m.home ? TEAMS[m.home] : null;
   const away = m.away ? TEAMS[m.away] : null;
   const stadium = STADIUMS[m.stadium];
@@ -610,7 +612,7 @@ function matchCardHTML(m) {
         }).join("")}
       </div>
 
-      ${home && away ? `
+      ${opts.showPred && home && away ? `
         <div class="pred-zone ${isLocked && !APP.currentUserId ? 'disabled' : ''}">
           <div class="pred-label">${
             result && predScore
@@ -632,7 +634,7 @@ function matchCardHTML(m) {
         </div>
       ` : ''}
 
-      ${APP.adminMode && home && away ? `
+      ${opts.showAdmin && APP.adminMode && home && away ? `
         <div class="admin-result">
           <label>ADMIN · Resultado:</label>
           <input type="number" min="0" max="20" class="score-input" data-result="${m.n}" data-side="h" value="${result ? result.h : ''}">
@@ -735,7 +737,7 @@ function renderCalendar() {
     ${dates.map(date => `
       <div class="matchday-section">
         <div class="matchday-title">${fmtDateLong(date)}</div>
-        ${byDate[date].sort((a, b) => a.hour.localeCompare(b.hour)).map(m => matchCardHTML(m)).join("")}
+        ${byDate[date].sort((a, b) => a.hour.localeCompare(b.hour)).map(m => matchCardHTML(m, { showPred: false, showAdmin: true })).join("")}
       </div>
     `).join("")}
   `;
