@@ -592,7 +592,86 @@ function renderHome() {
         </button>
       `).join("")}
     </div>
+
+    ${renderFixture()}
   `;
+}
+
+// ====== FIXTURE / SEGUIMIENTO ======
+function renderFixture() {
+  const koStages = [
+    { lbl: 'DIECISEISAVOS', matches: [73,74,75,76,77,78,79,80,81,82,83,84,85,86,87,88] },
+    { lbl: 'OCTAVOS',       matches: [89,90,91,92,93,94,95,96] },
+    { lbl: 'CUARTOS',       matches: [97,98,99,100] },
+    { lbl: 'SEMIS',         matches: [101,102] },
+    { lbl: '🏆 FINAL',      matches: [104], extra: { lbl: '🥉 3er PUESTO', n: 103 } },
+  ];
+
+  return `
+    <div class="section-bar" style="margin-top:4px;">FIXTURE · SEGUIMIENTO</div>
+
+    <div style="padding:10px 14px 2px;">
+      <div class="fixture-sublbl">FASE DE GRUPOS</div>
+      <div class="fixture-groups">
+        ${GROUPS.map(g => renderGroupMini(g)).join('')}
+      </div>
+    </div>
+
+    <div style="padding:10px 14px 4px;">
+      <div class="fixture-sublbl">FASE ELIMINATORIA · desliza →</div>
+    </div>
+    <div class="fixture-bracket-wrap">
+      <div class="fixture-bracket">
+        ${koStages.map(s => `
+          <div class="fixture-stage-col">
+            <div class="fixture-stage-lbl">${s.lbl}</div>
+            ${s.matches.map(n => renderBktMatch(n)).join('')}
+            ${s.extra ? `<div class="fixture-stage-lbl" style="margin-top:8px;">${s.extra.lbl}</div>${renderBktMatch(s.extra.n)}` : ''}
+          </div>
+        `).join('<div class="fixture-bracket-sep"></div>')}
+      </div>
+    </div>
+  `;
+}
+
+function renderGroupMini(groupId) {
+  const standings = groupStandings(groupId);
+  return `
+    <div class="group-mini" onclick="navTo('group',{groupId:'${groupId}'})">
+      <div class="group-mini-hdr">GRP ${groupId}</div>
+      ${standings.map((t, i) => `
+        <div class="group-mini-row${i < 2 ? ' q' : ''}">
+          <span class="gm-pos">${i + 1}</span>
+          <span class="gm-flag">${t.flag}</span>
+          <span class="gm-name">${t.name.length > 10 ? t.name.slice(0,10) + '…' : t.name}</span>
+          <span class="gm-pts">${t.pts}</span>
+        </div>
+      `).join('')}
+    </div>
+  `;
+}
+
+function renderBktMatch(n) {
+  const resolved = resolveMatchTeams(n);
+  const result   = APP.results[n];
+  const home     = resolved.home ? TEAMS[resolved.home] : null;
+  const away     = resolved.away ? TEAMS[resolved.away] : null;
+  const homeWon  = result && result.h > result.a;
+  const awayWon  = result && result.a > result.h;
+
+  const teamRow = (team, won, score) => `
+    <div class="bkt-t${won ? ' w' : ''}">
+      ${team
+        ? `<span class="bkt-flag">${team.flag}</span><span class="bkt-name">${team.name.length > 11 ? team.name.slice(0,11) + '…' : team.name}</span>`
+        : `<span class="bkt-tbd">—</span>`}
+      ${score !== undefined ? `<span class="bkt-sc">${score}</span>` : ''}
+    </div>`;
+
+  return `
+    <div class="bkt-match${result ? ' done' : ''}">
+      ${teamRow(home, homeWon, result?.h)}
+      ${teamRow(away, awayWon, result?.a)}
+    </div>`;
 }
 
 // ====== GRUPO ======

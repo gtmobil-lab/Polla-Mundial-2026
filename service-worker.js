@@ -1,6 +1,6 @@
 // Service Worker - Pollita Mundial 2026
 // IMPORTANTE: Bumpar CACHE_VERSION con cada deploy significativo
-const CACHE_VERSION = "v2";
+const CACHE_VERSION = "v3";
 const CACHE_NAME = "mundial2026-" + CACHE_VERSION;
 
 // Assets estáticos: cache-first (no cambian entre deploys)
