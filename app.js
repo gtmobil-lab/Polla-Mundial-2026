@@ -1466,6 +1466,15 @@ window.tryEnableAdmin = tryEnableAdmin;
 window.disableAdmin   = disableAdmin;
 
 // ====== AJUSTES ======
+function toggleRulesCard() {
+  const body    = document.getElementById("rules-card-body");
+  const chevron = document.getElementById("rules-chevron");
+  const open    = body.style.display === "none";
+  body.style.display    = open ? "block" : "none";
+  chevron.style.transform = open ? "rotate(90deg)" : "";
+}
+window.toggleRulesCard = toggleRulesCard;
+
 function renderSettings() {
   const el = document.getElementById("view-settings");
   el.innerHTML = `
@@ -1495,6 +1504,66 @@ function renderSettings() {
               </button>
             `).join("")
           }
+        </div>
+      </div>
+
+      <div style="background: var(--bg-card); border: 1px solid var(--line); border-radius: 12px; margin-bottom: 12px; overflow: hidden;">
+        <button onclick="toggleRulesCard()" style="width:100%;display:flex;align-items:center;justify-content:space-between;padding:14px;background:none;border:none;cursor:pointer;color:inherit;">
+          <span style="font-weight:700;font-size:14px;">📋 Reglas del Mundial 2026</span>
+          <span id="rules-chevron" style="font-size:18px;color:var(--text-dim);transition:transform 0.2s;">›</span>
+        </button>
+        <div id="rules-card-body" style="display:none;padding:0 14px 14px;">
+
+          <div style="font-size:11px;color:var(--text-dim);margin-bottom:12px;">FIFA World Cup 2026™ · Estructura y Formato Oficial</div>
+
+          <div style="font-size:12px;font-weight:700;color:var(--red);margin-bottom:6px;text-transform:uppercase;letter-spacing:0.05em;">1. Composición</div>
+          <div style="font-size:12px;color:var(--text-body);line-height:1.6;margin-bottom:12px;">
+            <strong>48 selecciones</strong> divididas en <strong>12 grupos de 4 equipos</strong> (Grupo A al L), coorganizado por Canadá, Estados Unidos y México.
+          </div>
+
+          <div style="font-size:12px;font-weight:700;color:var(--red);margin-bottom:6px;text-transform:uppercase;letter-spacing:0.05em;">2. Fase de Grupos</div>
+          <div style="font-size:12px;color:var(--text-body);line-height:1.6;margin-bottom:12px;">
+            Todos contra todos a una sola rueda — <strong>3 partidos</strong> por equipo.<br>
+            🟢 Victoria: <strong>3 pts</strong> &nbsp;·&nbsp; 🟡 Empate: <strong>1 pt</strong> &nbsp;·&nbsp; 🔴 Derrota: <strong>0 pts</strong>
+          </div>
+
+          <div style="font-size:12px;font-weight:700;color:var(--red);margin-bottom:6px;text-transform:uppercase;letter-spacing:0.05em;">3. Clasifican a Dieciseisavos</div>
+          <div style="font-size:12px;color:var(--text-body);line-height:1.6;margin-bottom:12px;">
+            <strong>32 equipos</strong> avanzan a la fase eliminatoria:<br>
+            • 1° de cada grupo (12 eq.)<br>
+            • 2° de cada grupo (12 eq.)<br>
+            • Los <strong>8 mejores terceros</strong> de los 12 grupos
+          </div>
+
+          <div style="font-size:12px;font-weight:700;color:var(--red);margin-bottom:8px;text-transform:uppercase;letter-spacing:0.05em;">4. Criterios de Desempate en Grupo</div>
+          <div style="font-size:11px;color:var(--text-body);line-height:1.7;margin-bottom:12px;">
+            <div style="display:grid;grid-template-columns:24px 1fr;gap:3px 8px;">
+              <span style="color:var(--text-dim);">1°</span><span>Diferencia de goles general (GF − GC)</span>
+              <span style="color:var(--text-dim);">2°</span><span>Mayor cantidad de goles a favor</span>
+              <span style="color:var(--text-dim);">3°</span><span>Puntos cara a cara entre los empatados</span>
+              <span style="color:var(--text-dim);">4°</span><span>Diferencia de goles cara a cara</span>
+              <span style="color:var(--text-dim);">5°</span><span>Goles a favor cara a cara</span>
+              <span style="color:var(--text-dim);">6°</span><span>Fair Play: Amarilla −1 / 2ªAm −3 / Roja −4 / Am+Roja −5</span>
+              <span style="color:var(--text-dim);">7°</span><span>Sorteo FIFA</span>
+            </div>
+          </div>
+
+          <div style="font-size:12px;font-weight:700;color:var(--red);margin-bottom:8px;text-transform:uppercase;letter-spacing:0.05em;">5. Mejores 8 Terceros</div>
+          <div style="font-size:11px;color:var(--text-body);line-height:1.7;margin-bottom:12px;">
+            Comparación entre los 12 terceros por: Puntos → Diferencia goles → Goles a favor → Fair Play → Sorteo FIFA
+          </div>
+
+          <div style="font-size:12px;font-weight:700;color:var(--red);margin-bottom:6px;text-transform:uppercase;letter-spacing:0.05em;">6. Fase Eliminatoria</div>
+          <div style="font-size:12px;color:var(--text-body);line-height:1.6;margin-bottom:12px;">
+            Partido único por eliminación. Si hay empate a los 90 min → <strong>prórroga 2×15 min</strong>. Si persiste → <strong>penales</strong>.<br><br>
+            <strong>Ruta al título (6 fases):</strong><br>
+            Dieciseisavos → Octavos → Cuartos → Semis → 3er Puesto / Final<br>
+            El campeón jugará <strong>8 partidos</strong> en total (3 grupos + 5 KO).
+          </div>
+
+          <div style="font-size:10px;color:var(--text-faint);font-family:'JetBrains Mono',monospace;padding-top:8px;border-top:1px solid var(--line);">
+            Fuente: Reglamento Oficial FIFA 2026
+          </div>
         </div>
       </div>
 
