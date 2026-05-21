@@ -1451,26 +1451,45 @@ async function resetData() {
 
 // ====== PWA INSTALL ======
 let deferredPrompt = null;
+
+function isIOSSafari() {
+  const ua = navigator.userAgent;
+  // iPad/iPhone/iPod pero NO Chrome para iOS, Firefox para iOS ni Opera
+  return /iPad|iPhone|iPod/.test(ua) && !window.MSStream && !/CriOS|FxiOS|OPiOS/.test(ua);
+}
+
+function showInstallBanner() {
+  if (localStorage.getItem("install_dismissed")) return;
+  const banner  = document.getElementById("install-banner");
+  const msg     = banner.querySelector(".msg");
+  const instBtn = banner.querySelector(".install-btn");
+
+  if (isIOSSafari()) {
+    msg.innerHTML = `
+      <strong>Instala la app</strong>
+      Toca <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14" style="vertical-align:middle;margin:0 2px;"><path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/><polyline points="16 6 12 2 8 6"/><line x1="12" y1="2" x2="12" y2="15"/></svg>
+      y elige <em>"Agregar a pantalla de inicio"</em>`;
+    if (instBtn) instBtn.style.display = "none";
+  }
+  banner.classList.add("show");
+}
+
+// Android/Chrome: escucha el prompt nativo
 window.addEventListener("beforeinstallprompt", e => {
   e.preventDefault();
   deferredPrompt = e;
-  setTimeout(() => {
-    if (!localStorage.getItem("install_dismissed")) {
-      document.getElementById("install-banner").classList.add("show");
-    }
-  }, 8000);
+  setTimeout(showInstallBanner, 8000);
 });
 
 function installApp() {
+  if (isIOSSafari()) return; // en iOS el banner ya muestra las instrucciones
   if (!deferredPrompt) {
     toast("Para instalar: menú del navegador → 'Agregar a pantalla de inicio'", "");
     return;
   }
   deferredPrompt.prompt();
   deferredPrompt.userChoice.then(choice => {
-    if (choice.outcome === "accepted") {
-      toast("¡App instalada!", "success");
-    }
+    if (choice.outcome === "accepted") toast("¡App instalada!", "success");
     document.getElementById("install-banner").classList.remove("show");
     deferredPrompt = null;
   });
@@ -1525,6 +1544,11 @@ async function init() {
     if (e.target.id === "modal-bg") closeModal();
   });
   document.getElementById("user-pill").addEventListener("click", openUserModal);
+
+  // iOS Safari no dispara beforeinstallprompt → mostrar instrucciones manuales
+  if (isIOSSafari() && !navigator.standalone) {
+    setTimeout(showInstallBanner, 8000);
+  }
 
   initSupabase();
   await dbLoad();
