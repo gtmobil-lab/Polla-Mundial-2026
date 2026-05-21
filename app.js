@@ -96,9 +96,12 @@ async function dbLoad() {
     const local = JSON.parse(localStorage.getItem(STORAGE_KEY) || "{}");
     APP.following     = local.following  || [];
     APP.adminMode     = local.adminMode  || false;
-    APP.currentUserId = (local.currentUserId && APP.users.some(u => u.id === local.currentUserId))
+    const myPlayers = getMyPlayers();
+    const validForDevice = id => APP.users.some(u => u.id === id) &&
+      (local.adminMode || myPlayers.includes(id));
+    APP.currentUserId = (local.currentUserId && validForDevice(local.currentUserId))
       ? local.currentUserId
-      : (APP.users[0]?.id || null);
+      : (myPlayers.find(id => APP.users.some(u => u.id === id)) || (local.adminMode ? APP.users[0]?.id : null) || null);
 
     save();
     setSyncBadge("online");
@@ -1275,18 +1278,33 @@ function openUserModal() {
       </div>
     `;
   } else {
-    modalContent.innerHTML = `
-      <h3>Cambiar jugador</h3>
-      <p>Elige quién está jugando ahora.</p>
-      <div class="modal-actions">
-        ${APP.users.map(u => `
-          <button class="modal-option ${u.id === APP.currentUserId ? 'active' : ''}" onclick="switchUser('${u.id}')">
-            ${u.id === APP.currentUserId ? '<div class="dot"></div>' : ''}
-            ${escHtml(u.name)}
-          </button>
-        `).join("")}
-      </div>
-    `;
+    // No-admin: solo puede cambiar a los jugadores que creó en este dispositivo
+    const visibleUsers = APP.adminMode
+      ? APP.users
+      : APP.users.filter(u => getMyPlayers().includes(u.id));
+
+    if (visibleUsers.length === 0) {
+      modalContent.innerHTML = `
+        <h3>Sin jugadores</h3>
+        <p>Aún no has creado ningún jugador. Ve a Ranking para agregar uno.</p>
+        <div class="modal-actions">
+          <button class="btn-primary" onclick="closeModal(); navTo('ranking')">Ir a Ranking</button>
+        </div>
+      `;
+    } else {
+      modalContent.innerHTML = `
+        <h3>Cambiar jugador</h3>
+        <p>${APP.adminMode ? 'Elige quién está jugando ahora.' : 'Elige tu jugador.'}</p>
+        <div class="modal-actions">
+          ${visibleUsers.map(u => `
+            <button class="modal-option ${u.id === APP.currentUserId ? 'active' : ''}" onclick="switchUser('${u.id}')">
+              ${u.id === APP.currentUserId ? '<div class="dot"></div>' : ''}
+              ${escHtml(u.name)}
+            </button>
+          `).join("")}
+        </div>
+      `;
+    }
   }
   modalBg.classList.add("open");
 }
