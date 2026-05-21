@@ -19,8 +19,8 @@ const STORAGE_KEY = "mundial2026_v1";
 // 1. Crea un proyecto en https://supabase.com (plan gratuito)
 // 2. Ejecuta supabase-setup.sql en Dashboard > SQL Editor
 // 3. Copia Project URL y anon key desde Dashboard > Settings > API
-const SUPABASE_URL = "TU_URL_SUPABASE";       // ej: https://xyzxyz.supabase.co
-const SUPABASE_ANON_KEY = "TU_ANON_KEY";      // empieza con "eyJ..."
+const SUPABASE_URL = "https://ebasnvygazfqzkpebybw.supabase.co";
+const SUPABASE_ANON_KEY = "sb_publishable_6lHWN72pn_0pZ6MB36KEzg_Q0gV6z_w";
 
 let sb = null;
 let _realtimeChannel = null;
@@ -678,10 +678,12 @@ async function savePrediction(n) {
   const m = getMatch(n);
   if (matchHasStarted(m)) { toast("El partido ya comenzó", "error"); return; }
 
-  const hInput = document.querySelector(`input[data-pred="${n}"][data-side="h"]`);
-  const aInput = document.querySelector(`input[data-pred="${n}"][data-side="a"]`);
-  const h = parseInt(hInput.value);
-  const a = parseInt(aInput.value);
+  const activeView = document.querySelector(".view.active");
+  const scope = activeView || document;
+  const hInput = scope.querySelector(`input[data-pred="${n}"][data-side="h"]`);
+  const aInput = scope.querySelector(`input[data-pred="${n}"][data-side="a"]`);
+  const h = parseInt(hInput?.value);
+  const a = parseInt(aInput?.value);
 
   if (isNaN(h) || isNaN(a) || h < 0 || a < 0) {
     toast("Ingresa marcador válido", "error"); return;
@@ -696,10 +698,12 @@ async function savePrediction(n) {
 }
 
 async function saveResult(n) {
-  const hInput = document.querySelector(`input[data-result="${n}"][data-side="h"]`);
-  const aInput = document.querySelector(`input[data-result="${n}"][data-side="a"]`);
-  const h = parseInt(hInput.value);
-  const a = parseInt(aInput.value);
+  const activeView = document.querySelector(".view.active");
+  const scope = activeView || document;
+  const hInput = scope.querySelector(`input[data-result="${n}"][data-side="h"]`);
+  const aInput = scope.querySelector(`input[data-result="${n}"][data-side="a"]`);
+  const h = parseInt(hInput?.value);
+  const a = parseInt(aInput?.value);
 
   if (isNaN(h) || isNaN(a) || h < 0 || a < 0) {
     toast("Ingresa marcador válido", "error"); return;
@@ -1011,6 +1015,98 @@ function updateUserPill() {
   }
 }
 
+// ====== ADMIN PIN ======
+const ADMIN_PIN_KEY = "mw26_admin_v1";
+
+function renderAdminCard() {
+  const pinSet = !!localStorage.getItem(ADMIN_PIN_KEY);
+
+  if (APP.adminMode) {
+    return `
+      <div style="background:linear-gradient(135deg,rgba(214,40,40,0.08),var(--bg-card));border:1px solid rgba(214,40,40,0.3);border-radius:12px;padding:14px;margin-bottom:12px;">
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;">
+          <div>
+            <div style="font-weight:700;font-size:14px;display:flex;align-items:center;gap:6px;">
+              <span style="color:var(--red);">●</span> Modo administrador activo
+            </div>
+            <div style="font-size:11px;color:var(--text-dim);margin-top:2px;">Puedes registrar resultados oficiales</div>
+          </div>
+          <button class="btn-secondary" style="white-space:nowrap;font-size:11px;" onclick="disableAdmin()">Desactivar</button>
+        </div>
+      </div>`;
+  }
+
+  if (!pinSet) {
+    return `
+      <div style="background:var(--bg-card);border:1px solid var(--line);border-radius:12px;padding:14px;margin-bottom:12px;">
+        <div style="font-weight:700;font-size:14px;margin-bottom:4px;">Modo administrador</div>
+        <div style="font-size:11px;color:var(--text-dim);margin-bottom:12px;">Configura un PIN para registrar resultados. Solo quien lo sepa podrá activarlo.</div>
+        <input type="password" id="admin-pin-new" placeholder="Nuevo PIN (mín. 4 dígitos)"
+          style="width:100%;background:var(--bg-app);border:1px solid var(--line-2);border-radius:8px;padding:10px 12px;font-size:14px;margin-bottom:8px;">
+        <input type="password" id="admin-pin-confirm" placeholder="Confirmar PIN"
+          style="width:100%;background:var(--bg-app);border:1px solid var(--line-2);border-radius:8px;padding:10px 12px;font-size:14px;margin-bottom:10px;">
+        <button class="btn-primary" style="width:100%;" onclick="tryEnableAdmin()">Configurar PIN y activar</button>
+      </div>`;
+  }
+
+  return `
+    <div style="background:var(--bg-card);border:1px solid var(--line);border-radius:12px;padding:14px;margin-bottom:12px;">
+      <div style="font-weight:700;font-size:14px;margin-bottom:4px;">Modo administrador</div>
+      <div style="font-size:11px;color:var(--text-dim);margin-bottom:12px;">Ingresa el PIN para registrar resultados oficiales</div>
+      <input type="password" id="admin-pin-input" placeholder="PIN de administrador"
+        style="width:100%;background:var(--bg-app);border:1px solid var(--line-2);border-radius:8px;padding:10px 12px;font-size:14px;margin-bottom:10px;">
+      <button class="btn-primary" style="width:100%;" onclick="tryEnableAdmin()">Activar</button>
+      <button style="width:100%;margin-top:8px;padding:8px;font-size:11px;color:var(--text-dim);text-align:center;" onclick="resetAdminPin()">Restablecer PIN</button>
+    </div>`;
+}
+
+function tryEnableAdmin() {
+  const pinSet = !!localStorage.getItem(ADMIN_PIN_KEY);
+
+  if (!pinSet) {
+    const newPin     = (document.getElementById("admin-pin-new")?.value     || "").trim();
+    const confirmPin = (document.getElementById("admin-pin-confirm")?.value || "").trim();
+    if (newPin.length < 4)     { toast("El PIN debe tener al menos 4 caracteres", "error"); return; }
+    if (newPin !== confirmPin) { toast("Los PINs no coinciden", "error"); return; }
+    localStorage.setItem(ADMIN_PIN_KEY, btoa(unescape(encodeURIComponent(newPin))));
+    APP.adminMode = true;
+    save();
+    toast("PIN configurado · Modo admin activado", "success");
+    renderSettings();
+    return;
+  }
+
+  const pin    = (document.getElementById("admin-pin-input")?.value || "").trim();
+  const stored = localStorage.getItem(ADMIN_PIN_KEY);
+  if (!pin || btoa(unescape(encodeURIComponent(pin))) !== stored) {
+    toast("PIN incorrecto", "error"); return;
+  }
+  APP.adminMode = true;
+  save();
+  toast("Modo administrador activado", "success");
+  renderSettings();
+}
+
+function disableAdmin() {
+  APP.adminMode = false;
+  save();
+  toast("Modo administrador desactivado");
+  renderSettings();
+}
+
+function resetAdminPin() {
+  if (!confirm("¿Resetear el PIN de administrador? Tendrás que configurar uno nuevo.")) return;
+  localStorage.removeItem(ADMIN_PIN_KEY);
+  APP.adminMode = false;
+  save();
+  toast("PIN reseteado");
+  renderSettings();
+}
+
+window.tryEnableAdmin = tryEnableAdmin;
+window.disableAdmin   = disableAdmin;
+window.resetAdminPin  = resetAdminPin;
+
 // ====== AJUSTES ======
 function renderSettings() {
   const el = document.getElementById("view-settings");
@@ -1019,20 +1115,7 @@ function renderSettings() {
       <div class="section-title">AJUSTES</div>
       <div class="section-sub">Configuración general</div>
 
-      <div style="background: var(--bg-card); border: 1px solid var(--line); border-radius: 12px; padding: 14px; margin-bottom: 12px;">
-        <div style="display: flex; justify-content: space-between; align-items: center;">
-          <div>
-            <div style="font-weight: 700; font-size: 14px;">Modo administrador</div>
-            <div style="font-size: 11px; color: var(--text-dim); margin-top: 2px;">Permite registrar los resultados oficiales</div>
-          </div>
-          <label style="display: inline-block; position: relative; width: 44px; height: 24px;">
-            <input type="checkbox" id="admin-toggle" ${APP.adminMode ? 'checked' : ''} style="opacity: 0; width: 0; height: 0;">
-            <span style="position: absolute; inset: 0; background: ${APP.adminMode ? 'var(--red)' : '#ccc'}; border-radius: 24px; transition: 0.2s; cursor: pointer;">
-              <span style="position: absolute; height: 18px; width: 18px; left: ${APP.adminMode ? '23px' : '3px'}; top: 3px; background: white; border-radius: 50%; transition: 0.2s;"></span>
-            </span>
-          </label>
-        </div>
-      </div>
+      ${renderAdminCard()}
 
       <div style="background: var(--bg-card); border: 1px solid var(--line); border-radius: 12px; padding: 14px; margin-bottom: 12px;">
         <div style="font-weight: 700; font-size: 14px; margin-bottom: 10px;">Datos</div>
@@ -1069,12 +1152,6 @@ function renderSettings() {
     </div>
   `;
 
-  document.getElementById("admin-toggle").addEventListener("change", e => {
-    APP.adminMode = e.target.checked;
-    save();
-    toast(APP.adminMode ? "Modo administrador activado" : "Modo administrador desactivado");
-    renderSettings();
-  });
 }
 
 function exportData() {
