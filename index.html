@@ -25,10 +25,13 @@
     <div class="brand-title">POLLITA <span class="red">MUNDIAL</span> 26</div>
     <div class="brand-sub">USA · MEX · CAN</div>
   </div>
-  <button class="user-pill" id="user-pill">
-    <div class="dot"></div>
-    <span>Sin jugador</span>
-  </button>
+  <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px;">
+    <button class="user-pill" id="user-pill">
+      <div class="dot"></div>
+      <span>Sin jugador</span>
+    </button>
+    <span id="sync-badge" class="sync-badge offline" style="display:none;">○ Sin conexión</span>
+  </div>
 </header>
 
 <!-- MAIN -->
@@ -87,7 +90,56 @@
 <!-- TOAST -->
 <div class="toast" id="toast"></div>
 
+<!-- LOADING OVERLAY -->
+<div id="loading-overlay" style="display:none;position:fixed;inset:0;background:rgba(10,10,10,0.92);z-index:2000;flex-direction:column;align-items:center;justify-content:center;gap:14px;">
+  <div class="spinner"></div>
+  <div style="font-family:'JetBrains Mono',monospace;color:#fff;font-size:11px;letter-spacing:0.12em;text-transform:uppercase;">Cargando datos...</div>
+</div>
+
+<!-- TÉRMINOS Y CONDICIONES -->
+<div class="terms-modal" id="terms-modal">
+  <div class="terms-box">
+    <div class="terms-header">
+      <div class="terms-logo">⚽</div>
+      <div class="terms-title">POLLITA<br><span style="color:var(--red)">MUNDIAL</span> 26</div>
+    </div>
+    <div class="terms-body">
+      <h2>Términos y Condiciones</h2>
+      <div class="terms-scroll">
+        <p><strong>NATURALEZA DEL SERVICIO</strong><br>
+        Esta aplicación es una herramienta de entretenimiento recreativo para el seguimiento del torneo FIFA World Cup 2026. Está destinada exclusivamente para uso personal entre grupos de amigos o familiares.</p>
+
+        <p><strong>RESPONSABILIDAD</strong><br>
+        La aplicación no garantiza disponibilidad continua del servicio. El desarrollador no se hace responsable por interrupciones, pérdida de datos, errores en los resultados mostrados ni por ningún perjuicio derivado del uso de la aplicación.</p>
+
+        <p><strong>ACUERDOS ECONÓMICOS</strong><br>
+        Cualquier acuerdo económico entre participantes (premios, apuestas, rifas u otras formas de incentivo) es de exclusiva responsabilidad de las partes involucradas. Esta aplicación no gestiona ni intermedia ningún tipo de transacción económica y no tiene vínculo legal con dichos acuerdos.</p>
+
+        <p><strong>DATOS Y PRIVACIDAD</strong><br>
+        Los nombres de jugadores y predicciones ingresados se almacenan en servidores de Supabase (supabase.com) y serán visibles para todos los participantes del grupo. No se recopilan datos sensibles (correos, contraseñas, datos de pago) ni se comparten con terceros fuera de Supabase.</p>
+
+        <p><strong>DISPONIBILIDAD DEL SERVICIO</strong><br>
+        El servicio depende de plataformas externas (Supabase, Vercel). La app incluye un modo offline con datos almacenados localmente en el dispositivo como respaldo.</p>
+
+        <p><strong>MODIFICACIONES</strong><br>
+        Estos términos pueden actualizarse. Se solicitará nueva aceptación al detectar una versión actualizada.</p>
+
+        <p class="terms-version">Versión 1.0 · Junio 2026</p>
+      </div>
+
+      <label class="terms-check">
+        <input type="checkbox" id="terms-checkbox">
+        <span>He leído y acepto los Términos y Condiciones</span>
+      </label>
+      <p id="terms-error" style="display:none;color:var(--red);font-size:11px;margin-top:6px;">Debes aceptar los términos para continuar.</p>
+      <button class="btn-primary terms-accept-btn" onclick="acceptTerms()">Aceptar y continuar</button>
+      <button id="terms-close-btn" style="display:none;width:100%;margin-top:8px;padding:10px;font-size:12px;color:rgba(255,255,255,0.4);text-align:center;" onclick="document.getElementById('terms-modal').classList.remove('open')">Cerrar</button>
+    </div>
+  </div>
+</div>
+
 <!-- SCRIPTS -->
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
 <script src="data.js"></script>
 <script src="app.js"></script>
 </body>

@@ -1,4 +1,4 @@
-// ============================================================
+﻿// ============================================================
 // MUNDIAL 2026 PWA - App Logic
 // ============================================================
 
@@ -14,6 +14,152 @@ const APP = {
 };
 
 const STORAGE_KEY = "mundial2026_v1";
+
+// ====== SUPABASE CONFIG ======
+// 1. Crea un proyecto en https://supabase.com (plan gratuito)
+// 2. Ejecuta supabase-setup.sql en Dashboard > SQL Editor
+// 3. Copia Project URL y anon key desde Dashboard > Settings > API
+const SUPABASE_URL = "TU_URL_SUPABASE";       // ej: https://xyzxyz.supabase.co
+const SUPABASE_ANON_KEY = "TU_ANON_KEY";      // empieza con "eyJ..."
+
+let sb = null;
+let _realtimeChannel = null;
+let _dbLoading = false;
+
+function initSupabase() {
+  if (!SUPABASE_URL || SUPABASE_URL === "TU_URL_SUPABASE") return false;
+  try {
+    sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+    const badge = document.getElementById("sync-badge");
+    if (badge) badge.style.display = "inline-flex";
+    return true;
+  } catch(e) {
+    console.warn("Supabase no disponible:", e);
+    return false;
+  }
+}
+
+// ====== DB — CARGA CENTRAL ======
+async function dbLoad() {
+  if (_dbLoading) return;
+  _dbLoading = true;
+
+  if (!sb) {
+    load();
+    _dbLoading = false;
+    return;
+  }
+
+  showLoading(true);
+  setSyncBadge("syncing");
+
+  try {
+    const [
+      { data: players, error: e1 },
+      { data: preds,   error: e2 },
+      { data: res,     error: e3 }
+    ] = await Promise.all([
+      sb.from("players").select("id, name").order("created_at"),
+      sb.from("predictions").select("player_id, match_n, home_score, away_score"),
+      sb.from("results").select("match_n, home_score, away_score")
+    ]);
+    if (e1 || e2 || e3) throw new Error(e1?.message || e2?.message || e3?.message);
+
+    APP.users = players || [];
+
+    APP.predictions = {};
+    for (const p of (preds || [])) {
+      if (!APP.predictions[p.player_id]) APP.predictions[p.player_id] = {};
+      APP.predictions[p.player_id][p.match_n] = { h: p.home_score, a: p.away_score };
+    }
+
+    APP.results = {};
+    for (const r of (res || [])) APP.results[r.match_n] = { h: r.home_score, a: r.away_score };
+
+    // Preferencias locales (no se sincronizan entre dispositivos)
+    const local = JSON.parse(localStorage.getItem(STORAGE_KEY) || "{}");
+    APP.following     = local.following  || [];
+    APP.adminMode     = local.adminMode  || false;
+    APP.currentUserId = (local.currentUserId && APP.users.some(u => u.id === local.currentUserId))
+      ? local.currentUserId
+      : (APP.users[0]?.id || null);
+
+    save();
+    setSyncBadge("online");
+
+  } catch(e) {
+    console.warn("Supabase no disponible, usando caché local:", e);
+    load();
+    setSyncBadge("offline");
+  }
+
+  _dbLoading = false;
+  showLoading(false);
+}
+
+// ====== DB — OPERACIONES ======
+async function dbAddPlayer(id, name) {
+  if (!sb) return;
+  const { error } = await sb.from("players").insert({ id, name });
+  if (error) throw error;
+}
+
+async function dbDeletePlayer(id) {
+  if (!sb) return;
+  const { error } = await sb.from("players").delete().eq("id", id);
+  if (error) throw error;
+}
+
+async function dbUpsertPrediction(playerId, matchN, h, a) {
+  if (!sb) return;
+  const { error } = await sb.from("predictions").upsert(
+    { player_id: playerId, match_n: matchN, home_score: h, away_score: a, updated_at: new Date().toISOString() },
+    { onConflict: "player_id,match_n" }
+  );
+  if (error) throw error;
+}
+
+async function dbUpsertResult(matchN, h, a) {
+  if (!sb) return;
+  const { error } = await sb.from("results").upsert(
+    { match_n: matchN, home_score: h, away_score: a },
+    { onConflict: "match_n" }
+  );
+  if (error) throw error;
+}
+
+async function dbDeleteResult(matchN) {
+  if (!sb) return;
+  const { error } = await sb.from("results").delete().eq("match_n", matchN);
+  if (error) throw error;
+}
+
+// ====== REALTIME ======
+function subscribeRealtime() {
+  if (!sb) return;
+  if (_realtimeChannel) sb.removeChannel(_realtimeChannel);
+  _realtimeChannel = sb.channel("app-sync")
+    .on("postgres_changes", { event: "*", schema: "public", table: "players" },     () => dbLoad())
+    .on("postgres_changes", { event: "*", schema: "public", table: "predictions" }, () => dbLoad())
+    .on("postgres_changes", { event: "*", schema: "public", table: "results" },     () => dbLoad())
+    .subscribe(status => {
+      if (status === "SUBSCRIBED") setSyncBadge("online");
+    });
+}
+
+// ====== LOADING / SYNC BADGE ======
+function showLoading(show) {
+  const el = document.getElementById("loading-overlay");
+  if (el) el.style.display = show ? "flex" : "none";
+}
+
+function setSyncBadge(state) {
+  const el = document.getElementById("sync-badge");
+  if (!el) return;
+  const labels = { online: "● En vivo", offline: "○ Sin conexión", syncing: "↻ Sync..." };
+  el.className = "sync-badge " + state;
+  el.textContent = labels[state] || "";
+}
 
 // ====== PERSISTENCIA ======
 function save() {
@@ -51,6 +197,15 @@ function load() {
 // ====== UTIL ======
 function uid() {
   return Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
+}
+
+function escHtml(str) {
+  return String(str)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
 }
 
 function fmtDate(iso) {
@@ -212,7 +367,8 @@ function navTo(view, params = {}, pushStack = true) {
     b.classList.toggle("active", b.dataset.target === view);
   });
 
-  window.scrollTo({ top: 0 });
+  const mainEl = document.querySelector("main");
+  if (mainEl) mainEl.scrollTop = 0;
   renderView(view, params);
 }
 
@@ -460,7 +616,7 @@ function matchCardHTML(m) {
             result && predScore
               ? (predScore.type === 'exact' ? '✓ EXACTO' : predScore.type === 'outcome' ? '✓ RESULTADO' : '✗ FALLASTE')
               : APP.currentUserId
-                ? (isLocked ? 'TU PREDICCIÓN' : 'TU PREDICCIÓN')
+                ? (isLocked && !userPred ? 'PREDICCIÓN CERRADA' : 'TU PREDICCIÓN')
                 : 'Crea un usuario'
           }</div>
           <div class="score-inputs">
@@ -506,17 +662,18 @@ function attachMatchCardHandlers() {
   });
 
   document.querySelectorAll("[data-clear-result]").forEach(btn => {
-    btn.addEventListener("click", e => {
+    btn.addEventListener("click", async e => {
       const n = parseInt(btn.dataset.clearResult);
       delete APP.results[n];
       save();
       toast("Resultado borrado", "success");
       renderView(APP.currentView, APP.currentParams);
+      try { await dbDeleteResult(n); } catch(e2) { /* estado local ya actualizado */ }
     });
   });
 }
 
-function savePrediction(n) {
+async function savePrediction(n) {
   if (!APP.currentUserId) { toast("Crea un usuario primero", "error"); return; }
   const m = getMatch(n);
   if (matchHasStarted(m)) { toast("El partido ya comenzó", "error"); return; }
@@ -535,9 +692,10 @@ function savePrediction(n) {
   save();
   toast(`Predicción ${h}-${a} guardada`, "success");
   renderView(APP.currentView, APP.currentParams);
+  try { await dbUpsertPrediction(APP.currentUserId, n, h, a); } catch(e) { /* estado local ya actualizado */ }
 }
 
-function saveResult(n) {
+async function saveResult(n) {
   const hInput = document.querySelector(`input[data-result="${n}"][data-side="h"]`);
   const aInput = document.querySelector(`input[data-result="${n}"][data-side="a"]`);
   const h = parseInt(hInput.value);
@@ -551,6 +709,7 @@ function saveResult(n) {
   save();
   toast(`Resultado #${n}: ${h}-${a} guardado`, "success");
   renderView(APP.currentView, APP.currentParams);
+  try { await dbUpsertResult(n, h, a); } catch(e) { /* estado local ya actualizado */ }
 }
 
 // ====== CALENDARIO ======
@@ -640,7 +799,16 @@ function toggleFollow(code) {
     toast(`Ahora sigues a ${TEAMS[code].name}`, "success");
   }
   save();
+  const searchInput = document.getElementById("team-search-input");
+  const savedQuery = searchInput ? searchInput.value : "";
   renderView(APP.currentView, APP.currentParams);
+  if (savedQuery && APP.currentView === "teams") {
+    const newInput = document.getElementById("team-search-input");
+    if (newInput) {
+      newInput.value = savedQuery;
+      renderTeamsList(savedQuery);
+    }
+  }
 }
 
 // ====== TEAM DETAIL ======
@@ -690,9 +858,13 @@ function renderTeamDetail(teamCode) {
     <div style="padding-bottom: 16px;">
       ${route.map(r => {
         const rivalTeam = r.rival ? TEAMS[r.rival] : null;
+        const isKOStage = ['R32','R16','QF','SF','3P','FINAL'].includes(r.match.group);
+        const stageNav = isKOStage
+          ? `navTo('ko', {stageId: '${r.match.group}'})`
+          : `navTo('group', {groupId: '${r.match.group}'})`;
         return `
           <div class="route-card ${r.result === 'W' ? 'win' : r.result === 'L' ? 'loss' : r.result === 'D' ? 'draw' : 'upcoming'}"
-            onclick="navTo('group', {groupId: '${r.match.group}'})">
+            onclick="${stageNav}">
             <div class="route-result ${r.result}">${r.result}</div>
             <div class="route-detail">
               <div class="matchup">
@@ -733,7 +905,7 @@ function renderRanking() {
         <div class="ranking-row ${u.id === APP.currentUserId ? 'current' : ''} ${i === 0 && u.pts > 0 ? 'top1' : i === 1 ? 'top2' : i === 2 ? 'top3' : ''}">
           <div class="rank-pos">${i + 1}°</div>
           <div class="rank-user">
-            <div class="name">${u.id === APP.currentUserId ? '👤 ' : ''}${u.name}</div>
+            <div class="name">${u.id === APP.currentUserId ? '👤 ' : ''}${escHtml(u.name)}</div>
             <div class="stats">${u.exact} exacto${u.exact !== 1 ? 's' : ''} · ${u.outcome} resultado${u.outcome !== 1 ? 's' : ''} · ${u.total} predich${u.total !== 1 ? 'os' : 'o'}</div>
           </div>
           <div>
@@ -752,7 +924,7 @@ function renderRanking() {
   `;
 }
 
-function addUser() {
+async function addUser() {
   const input = document.getElementById("new-user-name");
   const name = input.value.trim();
   if (!name) { toast("Ingresa un nombre", "error"); return; }
@@ -762,25 +934,27 @@ function addUser() {
   const id = uid();
   APP.users.push({ id, name });
   if (!APP.currentUserId) APP.currentUserId = id;
+  input.value = "";
   save();
-  toast(`${name} agregado`, "success");
   renderRanking();
   updateUserPill();
+  toast(`${name} agregado`, "success");
+  try { await dbAddPlayer(id, name); }
+  catch(e) { toast("Guardado localmente (sin conexión)", ""); }
 }
 
-function deleteUser(id) {
+async function deleteUser(id) {
   const u = APP.users.find(x => x.id === id);
   if (!u) return;
   if (!confirm(`¿Eliminar a ${u.name} y sus predicciones?`)) return;
   APP.users = APP.users.filter(x => x.id !== id);
   delete APP.predictions[id];
-  if (APP.currentUserId === id) {
-    APP.currentUserId = APP.users[0]?.id || null;
-  }
+  if (APP.currentUserId === id) APP.currentUserId = APP.users[0]?.id || null;
   save();
   toast(`${u.name} eliminado`);
   renderRanking();
   updateUserPill();
+  try { await dbDeletePlayer(id); } catch(e) { /* estado local ya actualizado */ }
 }
 
 // ====== USER SWITCH (modal) ======
@@ -804,7 +978,7 @@ function openUserModal() {
         ${APP.users.map(u => `
           <button class="modal-option ${u.id === APP.currentUserId ? 'active' : ''}" onclick="switchUser('${u.id}')">
             ${u.id === APP.currentUserId ? '<div class="dot"></div>' : ''}
-            ${u.name}
+            ${escHtml(u.name)}
           </button>
         `).join("")}
       </div>
@@ -831,7 +1005,7 @@ function updateUserPill() {
   const pill = document.getElementById("user-pill");
   const u = APP.users.find(x => x.id === APP.currentUserId);
   if (u) {
-    pill.innerHTML = `<div class="dot"></div><span>${u.name}</span>`;
+    pill.innerHTML = `<div class="dot"></div><span>${escHtml(u.name)}</span>`;
   } else {
     pill.innerHTML = `<div class="dot" style="background: #888;"></div><span>Sin jugador</span>`;
   }
@@ -883,6 +1057,11 @@ function renderSettings() {
         </div>
       </div>
 
+      <div style="background: var(--bg-card); border: 1px solid var(--line); border-radius: 12px; padding: 14px; margin-bottom: 12px;">
+        <div style="font-weight: 700; font-size: 14px; margin-bottom: 10px;">Legal</div>
+        <button class="btn-secondary" style="width: 100%;" onclick="showTermsFromSettings()">📄 Ver Términos y Condiciones</button>
+      </div>
+
       <div style="text-align: center; font-size: 10px; color: var(--text-faint); padding: 16px 0; font-family: 'JetBrains Mono', monospace; letter-spacing: 0.1em;">
         Pollita Mundial 2026 · v1.0<br>
         Horarios en hora Chile (CLT, UTC-4)
@@ -920,35 +1099,78 @@ function importData(event) {
   const file = event.target.files[0];
   if (!file) return;
   const reader = new FileReader();
-  reader.onload = e => {
+  reader.onload = async e => {
     try {
       const data = JSON.parse(e.target.result);
       if (!confirm("¿Reemplazar todos los datos actuales con el archivo?")) return;
-      APP.users = data.users || [];
+      APP.users       = data.users       || [];
       APP.predictions = data.predictions || {};
-      APP.results = data.results || {};
-      APP.following = data.following || [];
-      APP.currentUserId = APP.users[0]?.id || null;
+      APP.results     = data.results     || {};
+      APP.following   = data.following   || [];
+      APP.currentUserId = (data.currentUserId && APP.users.some(u => u.id === data.currentUserId))
+        ? data.currentUserId
+        : (APP.users[0]?.id || null);
       save();
-      toast("Datos importados", "success");
       renderView(APP.currentView, APP.currentParams);
       updateUserPill();
-    } catch (e) {
+
+      if (sb) {
+        toast("Sincronizando con Supabase...", "");
+        try {
+          await sb.from("predictions").delete().gte("match_n", 1);
+          await sb.from("results").delete().gte("match_n", 1);
+          await sb.from("players").delete().neq("id", "__none__");
+
+          if (APP.users.length)
+            await sb.from("players").insert(APP.users.map(u => ({ id: u.id, name: u.name })));
+
+          const preds = [];
+          Object.entries(APP.predictions).forEach(([pid, matches]) => {
+            Object.entries(matches).forEach(([n, pred]) => {
+              preds.push({ player_id: pid, match_n: +n, home_score: pred.h, away_score: pred.a });
+            });
+          });
+          if (preds.length) await sb.from("predictions").insert(preds);
+
+          const resArr = Object.entries(APP.results)
+            .map(([n, r]) => ({ match_n: +n, home_score: r.h, away_score: r.a }));
+          if (resArr.length) await sb.from("results").insert(resArr);
+
+          toast("Importación completa ✓", "success");
+        } catch(e2) {
+          toast("Importado localmente (error en sync)", "");
+        }
+      } else {
+        toast("Datos importados", "success");
+      }
+    } catch(e) {
       toast("Archivo inválido", "error");
     }
   };
   reader.readAsText(file);
 }
 
-function resetData() {
+async function resetData() {
   if (!confirm("¿Borrar TODOS los datos? Esto incluye jugadores, predicciones y resultados.")) return;
   if (!confirm("Esta acción no se puede deshacer. ¿Confirmas?")) return;
   localStorage.removeItem(STORAGE_KEY);
   APP.users = []; APP.currentUserId = null; APP.predictions = {};
   APP.results = {}; APP.following = []; APP.adminMode = false;
-  toast("Datos borrados", "success");
   renderView("home");
   updateUserPill();
+  if (sb) {
+    toast("Borrando datos...", "");
+    try {
+      await sb.from("predictions").delete().gte("match_n", 1);
+      await sb.from("results").delete().gte("match_n", 1);
+      await sb.from("players").delete().neq("id", "__none__");
+      toast("Datos borrados ✓", "success");
+    } catch(e) {
+      toast("Datos borrados localmente", "");
+    }
+  } else {
+    toast("Datos borrados", "success");
+  }
 }
 
 // ====== PWA INSTALL ======
@@ -990,20 +1212,49 @@ if ("serviceWorker" in navigator) {
   });
 }
 
+// ====== TÉRMINOS Y CONDICIONES ======
+const TERMS_KEY = "mw26_terms_v1";
+
+function checkTermsAccepted() {
+  if (!localStorage.getItem(TERMS_KEY)) {
+    document.getElementById("terms-modal").classList.add("open");
+  }
+}
+
+function acceptTerms() {
+  const cb  = document.getElementById("terms-checkbox");
+  const err = document.getElementById("terms-error");
+  if (!cb.checked) { err.style.display = "block"; return; }
+  localStorage.setItem(TERMS_KEY, "1");
+  document.getElementById("terms-modal").classList.remove("open");
+}
+
+function showTermsFromSettings() {
+  const btn = document.getElementById("terms-close-btn");
+  if (btn) btn.style.display = "block";
+  document.getElementById("terms-modal").classList.add("open");
+}
+
+window.acceptTerms = acceptTerms;
+window.showTermsFromSettings = showTermsFromSettings;
+
 // ====== INIT ======
-function init() {
-  load();
+async function init() {
+  checkTermsAccepted();
+
   document.querySelectorAll(".nav-btn").forEach(btn => {
-    btn.addEventListener("click", () => {
-      navTo(btn.dataset.target);
-    });
+    btn.addEventListener("click", () => navTo(btn.dataset.target));
   });
   document.getElementById("modal-bg").addEventListener("click", e => {
     if (e.target.id === "modal-bg") closeModal();
   });
   document.getElementById("user-pill").addEventListener("click", openUserModal);
+
+  initSupabase();
+  await dbLoad();
   navTo("home", {}, false);
   updateUserPill();
+  if (sb) subscribeRealtime();
 }
 
 window.addEventListener("DOMContentLoaded", init);
@@ -1021,3 +1272,4 @@ window.importData = importData;
 window.resetData = resetData;
 window.installApp = installApp;
 window.dismissInstall = dismissInstall;
+

@@ -8,7 +8,8 @@ const ASSETS = [
   "./data.js",
   "./manifest.json",
   "./icon-192.png",
-  "./icon-512.png"
+  "./icon-512.png",
+  "./apple-touch-icon.png"
 ];
 
 // Instalar: cachear assets básicos
