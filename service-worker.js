@@ -1,26 +1,36 @@
 // Service Worker - Pollita Mundial 2026
-const CACHE_NAME = "mundial2026-v1";
-const ASSETS = [
-  "./",
-  "./index.html",
-  "./styles.css",
-  "./app.js",
-  "./data.js",
+// IMPORTANTE: Bumpar CACHE_VERSION con cada deploy significativo
+const CACHE_VERSION = "v2";
+const CACHE_NAME = "mundial2026-" + CACHE_VERSION;
+
+// Assets estáticos: cache-first (no cambian entre deploys)
+const STATIC_ASSETS = [
   "./manifest.json",
   "./icon-192.png",
   "./icon-512.png",
   "./apple-touch-icon.png"
 ];
 
-// Instalar: cachear assets básicos
+// Código de la app: network-first (siempre busca versión fresca)
+const APP_ASSETS = [
+  "./",
+  "./index.html",
+  "./styles.css",
+  "./app.js",
+  "./data.js"
+];
+
+// Instalar: pre-cachear todo
 self.addEventListener("install", event => {
   event.waitUntil(
-    caches.open(CACHE_NAME).then(cache => cache.addAll(ASSETS).catch(() => {}))
+    caches.open(CACHE_NAME).then(cache =>
+      cache.addAll([...STATIC_ASSETS, ...APP_ASSETS]).catch(() => {})
+    )
   );
   self.skipWaiting();
 });
 
-// Activar: limpiar caches antiguos
+// Activar: eliminar cachés de versiones anteriores
 self.addEventListener("activate", event => {
   event.waitUntil(
     caches.keys().then(keys =>
@@ -30,11 +40,8 @@ self.addEventListener("activate", event => {
   self.clients.claim();
 });
 
-// Fetch: estrategia cache-first para assets propios, network-first para fuentes
 self.addEventListener("fetch", event => {
   const url = new URL(event.request.url);
-
-  // Solo GET
   if (event.request.method !== "GET") return;
 
   // Fuentes de Google: stale-while-revalidate
@@ -54,8 +61,23 @@ self.addEventListener("fetch", event => {
     return;
   }
 
-  // Mismo origen: cache-first, fallback a red
-  if (url.origin === self.location.origin) {
+  if (url.origin !== self.location.origin) return;
+
+  const isAppAsset = APP_ASSETS.some(a => url.pathname.endsWith(a.replace("./", "/"))) || url.pathname === "/";
+
+  if (isAppAsset) {
+    // Network-first: siempre intenta traer la versión más reciente
+    event.respondWith(
+      fetch(event.request).then(response => {
+        if (response && response.status === 200) {
+          const clone = response.clone();
+          caches.open(CACHE_NAME).then(cache => cache.put(event.request, clone));
+        }
+        return response;
+      }).catch(() => caches.match(event.request).then(cached => cached || caches.match("./index.html")))
+    );
+  } else {
+    // Cache-first para assets estáticos (iconos, etc.)
     event.respondWith(
       caches.match(event.request).then(cached => {
         if (cached) return cached;
