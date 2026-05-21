@@ -28,11 +28,19 @@ CREATE TABLE IF NOT EXISTS results (
   recorded_at TIMESTAMPTZ DEFAULT NOW()
 );
 
+CREATE TABLE IF NOT EXISTS brackets (
+  match_n     INTEGER PRIMARY KEY CHECK (match_n BETWEEN 73 AND 104),
+  home_code   TEXT,
+  away_code   TEXT,
+  updated_at  TIMESTAMPTZ DEFAULT NOW()
+);
+
 -- 2. ROW LEVEL SECURITY
 
 ALTER TABLE players     ENABLE ROW LEVEL SECURITY;
 ALTER TABLE predictions ENABLE ROW LEVEL SECURITY;
 ALTER TABLE results     ENABLE ROW LEVEL SECURITY;
+ALTER TABLE brackets    ENABLE ROW LEVEL SECURITY;
 
 -- Players: lectura y escritura pública (app privada entre amigos)
 CREATE POLICY "players_select" ON players FOR SELECT USING (true);
@@ -50,8 +58,15 @@ CREATE POLICY "results_insert" ON results FOR INSERT WITH CHECK (true);
 CREATE POLICY "results_update" ON results FOR UPDATE USING (true);
 CREATE POLICY "results_delete" ON results FOR DELETE USING (true);
 
+-- Brackets: lectura pública, escritura controlada por adminMode en la app
+CREATE POLICY "brackets_select" ON brackets FOR SELECT USING (true);
+CREATE POLICY "brackets_insert" ON brackets FOR INSERT WITH CHECK (true);
+CREATE POLICY "brackets_update" ON brackets FOR UPDATE USING (true);
+CREATE POLICY "brackets_delete" ON brackets FOR DELETE USING (true);
+
 -- 3. REALTIME (sincronización en vivo entre dispositivos)
 
 ALTER PUBLICATION supabase_realtime ADD TABLE players;
 ALTER PUBLICATION supabase_realtime ADD TABLE predictions;
 ALTER PUBLICATION supabase_realtime ADD TABLE results;
+ALTER PUBLICATION supabase_realtime ADD TABLE brackets;

@@ -7,6 +7,7 @@ const APP = {
   currentUserId: null,
   predictions: {},   // { userId: { matchN: {h, a} } }
   results: {},       // { matchN: {h, a} }
+  brackets: {},      // { matchN: { home: teamCode, away: teamCode } } — overrides admin
   following: [],     // array de códigos de equipo
   adminMode: false,  // permite editar resultados
   currentView: "home",
@@ -57,13 +58,15 @@ async function dbLoad() {
     const [
       { data: players, error: e1 },
       { data: preds,   error: e2 },
-      { data: res,     error: e3 }
+      { data: res,     error: e3 },
+      { data: bracks,  error: e4 }
     ] = await Promise.all([
       sb.from("players").select("id, name").order("created_at"),
       sb.from("predictions").select("player_id, match_n, home_score, away_score"),
-      sb.from("results").select("match_n, home_score, away_score")
+      sb.from("results").select("match_n, home_score, away_score"),
+      sb.from("brackets").select("match_n, home_code, away_code")
     ]);
-    if (e1 || e2 || e3) throw new Error(e1?.message || e2?.message || e3?.message);
+    if (e1 || e2 || e3 || e4) throw new Error(e1?.message || e2?.message || e3?.message || e4?.message);
 
     APP.users = players || [];
 
@@ -75,6 +78,11 @@ async function dbLoad() {
 
     APP.results = {};
     for (const r of (res || [])) APP.results[r.match_n] = { h: r.home_score, a: r.away_score };
+
+    APP.brackets = {};
+    for (const b of (bracks || [])) {
+      APP.brackets[b.match_n] = { home: b.home_code, away: b.away_code };
+    }
 
     // Preferencias locales (no se sincronizan entre dispositivos)
     const local = JSON.parse(localStorage.getItem(STORAGE_KEY) || "{}");
@@ -134,6 +142,21 @@ async function dbDeleteResult(matchN) {
   if (error) throw error;
 }
 
+async function dbUpsertBracket(matchN, homeCode, awayCode) {
+  if (!sb) return;
+  const { error } = await sb.from("brackets").upsert(
+    { match_n: matchN, home_code: homeCode || null, away_code: awayCode || null },
+    { onConflict: "match_n" }
+  );
+  if (error) throw error;
+}
+
+async function dbDeleteBracket(matchN) {
+  if (!sb) return;
+  const { error } = await sb.from("brackets").delete().eq("match_n", matchN);
+  if (error) throw error;
+}
+
 // ====== REALTIME ======
 function subscribeRealtime() {
   if (!sb) return;
@@ -142,6 +165,7 @@ function subscribeRealtime() {
     .on("postgres_changes", { event: "*", schema: "public", table: "players" },     () => dbLoad())
     .on("postgres_changes", { event: "*", schema: "public", table: "predictions" }, () => dbLoad())
     .on("postgres_changes", { event: "*", schema: "public", table: "results" },     () => dbLoad())
+    .on("postgres_changes", { event: "*", schema: "public", table: "brackets" },    () => dbLoad())
     .subscribe(status => {
       if (status === "SUBSCRIBED") setSyncBadge("online");
     });
@@ -168,6 +192,7 @@ function save() {
     currentUserId: APP.currentUserId,
     predictions: APP.predictions,
     results: APP.results,
+    brackets: APP.brackets,
     following: APP.following,
     adminMode: APP.adminMode
   };
@@ -187,6 +212,7 @@ function load() {
     APP.currentUserId = data.currentUserId || null;
     APP.predictions = data.predictions || {};
     APP.results = data.results || {};
+    APP.brackets = data.brackets || {};
     APP.following = data.following || [];
     APP.adminMode = data.adminMode || false;
   } catch (e) {
@@ -348,6 +374,112 @@ function teamRoute(teamCode) {
       }
       return { match: m, rival, result, scoreText, isHome };
     });
+}
+
+// ====== BRACKET KO — RESOLUCIÓN DE CRUCES ======
+
+const KO_STAGES_SET = new Set(['R32','R16','QF','SF','3P','FINAL']);
+
+// Slots auto-calculables de los Dieciseisavos (1°/2° de grupo)
+// Los slots ausentes son los 3° mejores → el admin los completa
+const R32_AUTO_MAP = {
+  73: { home: { pos: 2, group: 'A' }, away: { pos: 2, group: 'B' } },
+  74: { home: { pos: 1, group: 'E' } },
+  75: { home: { pos: 1, group: 'F' }, away: { pos: 2, group: 'C' } },
+  76: { home: { pos: 1, group: 'C' }, away: { pos: 2, group: 'F' } },
+  77: { home: { pos: 1, group: 'I' } },
+  78: { home: { pos: 2, group: 'E' }, away: { pos: 2, group: 'I' } },
+  79: { home: { pos: 1, group: 'A' } },
+  80: { home: { pos: 1, group: 'L' } },
+  81: { home: { pos: 1, group: 'D' } },
+  82: { home: { pos: 1, group: 'G' } },
+  83: { home: { pos: 2, group: 'K' }, away: { pos: 2, group: 'L' } },
+  84: { home: { pos: 1, group: 'H' }, away: { pos: 2, group: 'J' } },
+  85: { home: { pos: 1, group: 'B' } },
+  86: { home: { pos: 1, group: 'J' }, away: { pos: 2, group: 'H' } },
+  87: { home: { pos: 1, group: 'K' } },
+  88: { home: { pos: 2, group: 'D' }, away: { pos: 2, group: 'G' } },
+};
+
+// Propagación de ganadores/perdedores para Octavos en adelante
+const KO_WINNER_MAP = {
+  89:  { home: { win: 74 }, away: { win: 77 } },
+  90:  { home: { win: 73 }, away: { win: 75 } },
+  91:  { home: { win: 76 }, away: { win: 78 } },
+  92:  { home: { win: 79 }, away: { win: 80 } },
+  93:  { home: { win: 83 }, away: { win: 84 } },
+  94:  { home: { win: 81 }, away: { win: 82 } },
+  95:  { home: { win: 86 }, away: { win: 88 } },
+  96:  { home: { win: 85 }, away: { win: 87 } },
+  97:  { home: { win: 89 }, away: { win: 90 } },
+  98:  { home: { win: 93 }, away: { win: 94 } },
+  99:  { home: { win: 91 }, away: { win: 92 } },
+  100: { home: { win: 95 }, away: { win: 96 } },
+  101: { home: { win: 97 }, away: { win: 98 } },
+  102: { home: { win: 99 }, away: { win: 100 } },
+  103: { home: { lose: 101 }, away: { lose: 102 } },
+  104: { home: { win: 101 }, away: { win: 102 } },
+};
+
+function resolveKOSlot(slot) {
+  if (!slot) return null;
+  if (slot.group) {
+    const standings = groupStandings(slot.group);
+    return standings[slot.pos - 1]?.code || null;
+  }
+  if (slot.win !== undefined) {
+    const teams = resolveMatchTeams(slot.win);
+    const result = APP.results[slot.win];
+    if (!teams.home || !teams.away || !result) return null;
+    if (result.h > result.a) return teams.home;
+    if (result.a > result.h) return teams.away;
+    return null; // empate → no se puede determinar auto (penales)
+  }
+  if (slot.lose !== undefined) {
+    const teams = resolveMatchTeams(slot.lose);
+    const result = APP.results[slot.lose];
+    if (!teams.home || !teams.away || !result) return null;
+    if (result.h > result.a) return teams.away;
+    if (result.a > result.h) return teams.home;
+    return null;
+  }
+  return null;
+}
+
+function resolveMatchTeams(n) {
+  const match = getMatch(n);
+  if (!match) return { home: null, away: null };
+
+  // Fase de grupos: datos estáticos
+  if (!KO_STAGES_SET.has(match.group)) return { home: match.home, away: match.away };
+
+  // Fase KO: cálculo automático
+  let home = null, away = null;
+
+  if (R32_AUTO_MAP[n]) {
+    const m = R32_AUTO_MAP[n];
+    if (m.home) home = resolveKOSlot(m.home);
+    if (m.away) away = resolveKOSlot(m.away);
+  }
+  if (KO_WINNER_MAP[n]) {
+    const m = KO_WINNER_MAP[n];
+    home = resolveKOSlot(m.home);
+    away = resolveKOSlot(m.away);
+  }
+
+  // Override del admin tiene prioridad sobre el auto
+  const ov = APP.brackets[n];
+  if (ov?.home) home = ov.home;
+  if (ov?.away) away = ov.away;
+
+  return { home, away };
+}
+
+function teamSelectOptions(selectedCode) {
+  return Object.values(TEAMS)
+    .sort((a, b) => a.name.localeCompare(b.name))
+    .map(t => `<option value="${t.code}"${t.code === selectedCode ? ' selected' : ''}>${t.flag} ${t.name}</option>`)
+    .join('');
 }
 
 // ====== NAVEGACIÓN ======
@@ -548,10 +680,12 @@ function renderKO(stageId) {
 
 // ====== MATCH CARD HTML ======
 // opts.showPred  = true → muestra zona de predicciones (grupos y fases KO)
-// opts.showAdmin = true → muestra zona de resultados admin (calendario)
+// opts.showAdmin = true → muestra zona de resultados + editor de cruces KO (calendario)
 function matchCardHTML(m, opts = { showPred: true, showAdmin: false }) {
-  const home = m.home ? TEAMS[m.home] : null;
-  const away = m.away ? TEAMS[m.away] : null;
+  const isKOStage = KO_STAGES_SET.has(m.group);
+  const resolved = isKOStage ? resolveMatchTeams(m.n) : { home: m.home, away: m.away };
+  const home = resolved.home ? TEAMS[resolved.home] : null;
+  const away = resolved.away ? TEAMS[resolved.away] : null;
   const stadium = STADIUMS[m.stadium];
   const result = APP.results[m.n];
   const hasStarted = matchHasStarted(m);
@@ -644,6 +778,41 @@ function matchCardHTML(m, opts = { showPred: true, showAdmin: false }) {
           ${result ? `<button class="btn-pred" style="background: var(--text-dim);" data-clear-result="${m.n}">Borrar</button>` : ''}
         </div>
       ` : ''}
+
+      ${opts.showAdmin && APP.adminMode && isKOStage ? (() => {
+        const hasOverride = !!APP.brackets[m.n];
+        const autoHome = (() => { const ov = APP.brackets[m.n]; if (ov?.home) return null; if (R32_AUTO_MAP[m.n]?.home) return resolveKOSlot(R32_AUTO_MAP[m.n].home); if (KO_WINNER_MAP[m.n]?.home) return resolveKOSlot(KO_WINNER_MAP[m.n].home); return null; })();
+        const autoAway = (() => { const ov = APP.brackets[m.n]; if (ov?.away) return null; if (R32_AUTO_MAP[m.n]?.away) return resolveKOSlot(R32_AUTO_MAP[m.n].away); if (KO_WINNER_MAP[m.n]?.away) return resolveKOSlot(KO_WINNER_MAP[m.n].away); return null; })();
+        const selectStyle = "background:var(--bg-app);border:1px solid var(--line-2);border-radius:6px;padding:6px 8px;font-size:12px;color:var(--text);width:100%;";
+        return `
+          <div class="admin-result" style="flex-direction:column;align-items:stretch;gap:8px;">
+            <label style="display:flex;justify-content:space-between;align-items:center;">
+              ADMIN · Cruce KO
+              ${hasOverride ? '<span style="font-size:10px;color:var(--gold);font-family:\'JetBrains Mono\',monospace;">EDITADO</span>' : '<span style="font-size:10px;color:var(--text-dim);font-family:\'JetBrains Mono\',monospace;">AUTO</span>'}
+            </label>
+            <div style="display:grid;grid-template-columns:1fr auto 1fr;gap:6px;align-items:center;">
+              <div>
+                ${autoHome ? `<div style="font-size:10px;color:var(--text-dim);margin-bottom:2px;">Auto: ${TEAMS[autoHome]?.flag || ''} ${TEAMS[autoHome]?.name || autoHome}</div>` : ''}
+                <select data-bracket="${m.n}" data-side="h" style="${selectStyle}">
+                  <option value="">— Por definir —</option>
+                  ${teamSelectOptions(resolved.home)}
+                </select>
+              </div>
+              <span style="color:var(--text-faint);font-size:12px;">vs</span>
+              <div>
+                ${autoAway ? `<div style="font-size:10px;color:var(--text-dim);margin-bottom:2px;">Auto: ${TEAMS[autoAway]?.flag || ''} ${TEAMS[autoAway]?.name || autoAway}</div>` : ''}
+                <select data-bracket="${m.n}" data-side="a" style="${selectStyle}">
+                  <option value="">— Por definir —</option>
+                  ${teamSelectOptions(resolved.away)}
+                </select>
+              </div>
+            </div>
+            <div style="display:flex;gap:6px;">
+              <button class="btn-pred" style="flex:1;" data-save-bracket="${m.n}">Guardar cruce</button>
+              ${hasOverride ? `<button class="btn-pred" style="background:var(--text-dim);" data-clear-bracket="${m.n}">Resetear auto</button>` : ''}
+            </div>
+          </div>`;
+      })() : ''}
     </div>
   `;
 }
@@ -667,6 +836,40 @@ function attachMatchCardHandlers() {
       try { await dbDeleteResult(n); } catch(e) { /* estado local ya actualizado */ }
     });
   });
+
+  document.querySelectorAll("[data-save-bracket]").forEach(btn => {
+    btn.addEventListener("click", () => saveBracket(parseInt(btn.dataset.saveBracket), btn));
+  });
+
+  document.querySelectorAll("[data-clear-bracket]").forEach(btn => {
+    btn.addEventListener("click", () => clearBracket(parseInt(btn.dataset.clearBracket)));
+  });
+}
+
+async function saveBracket(n, btn) {
+  const zone = btn.closest(".admin-result");
+  const hSel = zone?.querySelector(`select[data-bracket="${n}"][data-side="h"]`);
+  const aSel = zone?.querySelector(`select[data-bracket="${n}"][data-side="a"]`);
+  const homeVal = hSel?.value || null;
+  const awayVal = aSel?.value || null;
+
+  if (!homeVal && !awayVal) { toast("Selecciona al menos un equipo", "error"); return; }
+
+  if (!APP.brackets[n]) APP.brackets[n] = {};
+  if (homeVal) APP.brackets[n].home = homeVal;
+  if (awayVal) APP.brackets[n].away = awayVal;
+  save();
+  toast("Cruce guardado", "success");
+  renderView(APP.currentView, APP.currentParams);
+  try { await dbUpsertBracket(n, homeVal, awayVal); } catch(e) { /* local ya actualizado */ }
+}
+
+async function clearBracket(n) {
+  delete APP.brackets[n];
+  save();
+  toast("Cruce reseteado a automático", "success");
+  renderView(APP.currentView, APP.currentParams);
+  try { await dbDeleteBracket(n); } catch(e) { /* local ya actualizado */ }
 }
 
 async function savePrediction(n, btn) {
@@ -1345,4 +1548,6 @@ window.importData = importData;
 window.resetData = resetData;
 window.installApp = installApp;
 window.dismissInstall = dismissInstall;
+window.saveBracket = saveBracket;
+window.clearBracket = clearBracket;
 
