@@ -14,7 +14,15 @@ const APP = {
   navigationStack: []
 };
 
-const STORAGE_KEY = "mundial2026_v1";
+const STORAGE_KEY    = "mundial2026_v1";
+const MY_PLAYERS_KEY = "mw26_mine_v1"; // IDs creados en este dispositivo (no se sincroniza)
+
+function getMyPlayers() {
+  try { return JSON.parse(localStorage.getItem(MY_PLAYERS_KEY) || "[]"); } catch(e) { return []; }
+}
+function saveMyPlayers(arr) {
+  try { localStorage.setItem(MY_PLAYERS_KEY, JSON.stringify(arr)); } catch(e) {}
+}
 
 // ====== SUPABASE CONFIG ======
 // 1. Crea un proyecto en https://supabase.com (plan gratuito)
@@ -1216,8 +1224,9 @@ async function addUser() {
   const input = document.getElementById("new-user-name");
   const name = input.value.trim();
   if (!name) { toast("Ingresa un nombre", "error"); return; }
-  if (!APP.adminMode && APP.users.length >= 2) {
-    toast("Límite de 2 jugadores alcanzado", "error"); return;
+  const myPlayers = getMyPlayers();
+  if (!APP.adminMode && myPlayers.length >= 2) {
+    toast("Ya creaste 2 jugadores desde este dispositivo", "error"); return;
   }
   if (APP.users.some(u => u.name.toLowerCase() === name.toLowerCase())) {
     toast("Ese nombre ya existe", "error"); return;
@@ -1227,6 +1236,8 @@ async function addUser() {
   if (!APP.currentUserId) APP.currentUserId = id;
   input.value = "";
   save();
+  // Registrar en este dispositivo (límite local)
+  if (!APP.adminMode) saveMyPlayers([...getMyPlayers(), id]);
   renderRanking();
   updateUserPill();
   toast(`${name} agregado`, "success");
@@ -1242,6 +1253,8 @@ async function deleteUser(id) {
   delete APP.predictions[id];
   if (APP.currentUserId === id) APP.currentUserId = APP.users[0]?.id || null;
   save();
+  // Limpiar del registro local si fue creado en este dispositivo
+  saveMyPlayers(getMyPlayers().filter(pid => pid !== id));
   toast(`${u.name} eliminado`);
   renderRanking();
   updateUserPill();
