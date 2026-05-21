@@ -94,8 +94,9 @@ async function dbLoad() {
 
     // Preferencias locales (no se sincronizan entre dispositivos)
     const local = JSON.parse(localStorage.getItem(STORAGE_KEY) || "{}");
-    APP.following     = local.following  || [];
-    APP.adminMode     = local.adminMode  || false;
+    APP.following = local.following || [];
+    // Revocar adminMode si el TTL expiró
+    APP.adminMode = (local.adminMode && local.adminModeExpiry && local.adminModeExpiry > Date.now()) ? true : false;
     const myPlayers = getMyPlayers();
     const validForDevice = id => APP.users.some(u => u.id === id) &&
       (local.adminMode || myPlayers.includes(id));
@@ -197,6 +198,8 @@ function setSyncBadge(state) {
 }
 
 // ====== PERSISTENCIA ======
+const ADMIN_TTL_MS = 4 * 60 * 60 * 1000; // 4 horas
+
 function save() {
   const data = {
     users: APP.users,
@@ -205,7 +208,8 @@ function save() {
     results: APP.results,
     brackets: APP.brackets,
     following: APP.following,
-    adminMode: APP.adminMode
+    adminMode: APP.adminMode,
+    adminModeExpiry: APP.adminMode ? (Date.now() + ADMIN_TTL_MS) : null
   };
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
@@ -225,7 +229,8 @@ function load() {
     APP.results = data.results || {};
     APP.brackets = data.brackets || {};
     APP.following = data.following || [];
-    APP.adminMode = data.adminMode || false;
+    // Revocar adminMode si el TTL expiró
+    APP.adminMode = (data.adminMode && data.adminModeExpiry && data.adminModeExpiry > Date.now()) ? true : false;
   } catch (e) {
     console.warn("No se pudo cargar", e);
   }
@@ -1418,6 +1423,17 @@ function updateUserPill() {
 // Ejemplo: btoa("5678") → "NTY3OA=="
 const ADMIN_PIN_HASH = "NTY3OA==";
 
+function adminExpiryLabel() {
+  const local = JSON.parse(localStorage.getItem(STORAGE_KEY) || "{}");
+  const expiry = local.adminModeExpiry;
+  if (!expiry) return "";
+  const msLeft = expiry - Date.now();
+  if (msLeft <= 0) return "Expira pronto";
+  const h = Math.floor(msLeft / 3600000);
+  const m = Math.floor((msLeft % 3600000) / 60000);
+  return h > 0 ? `Expira en ${h}h ${m}m` : `Expira en ${m}m`;
+}
+
 function renderAdminCard() {
   if (APP.adminMode) {
     return `
@@ -1427,7 +1443,7 @@ function renderAdminCard() {
             <div style="font-weight:700;font-size:14px;display:flex;align-items:center;gap:6px;">
               <span style="color:var(--red);">●</span> Modo administrador activo
             </div>
-            <div style="font-size:11px;color:var(--text-dim);margin-top:2px;">Puedes registrar resultados oficiales</div>
+            <div style="font-size:11px;color:var(--text-dim);margin-top:2px;">Puedes registrar resultados oficiales · ${adminExpiryLabel()}</div>
           </div>
           <button class="btn-secondary" style="white-space:nowrap;font-size:11px;" onclick="disableAdmin()">Desactivar</button>
         </div>
