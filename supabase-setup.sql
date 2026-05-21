@@ -42,27 +42,28 @@ ALTER TABLE predictions ENABLE ROW LEVEL SECURITY;
 ALTER TABLE results     ENABLE ROW LEVEL SECURITY;
 ALTER TABLE brackets    ENABLE ROW LEVEL SECURITY;
 
--- Players: lectura y escritura pública (app privada entre amigos)
+-- Players: lectura y escritura pública (jugadores se registran solos)
+--          solo admin autenticado puede eliminar
 CREATE POLICY "players_select" ON players FOR SELECT USING (true);
 CREATE POLICY "players_insert" ON players FOR INSERT WITH CHECK (true);
-CREATE POLICY "players_delete" ON players FOR DELETE USING (true);
+CREATE POLICY "players_delete" ON players FOR DELETE USING (auth.role() = 'authenticated');
 
--- Predictions: lectura y escritura pública
+-- Predictions: lectura pública, escritura pública (cada jugador guarda las suyas)
 CREATE POLICY "predictions_select" ON predictions FOR SELECT USING (true);
 CREATE POLICY "predictions_insert" ON predictions FOR INSERT WITH CHECK (true);
 CREATE POLICY "predictions_update" ON predictions FOR UPDATE USING (true);
 
--- Results: lectura pública, escritura controlada por adminMode en la app
+-- Results: lectura pública, escritura SOLO para admin autenticado via Supabase Auth
 CREATE POLICY "results_select" ON results FOR SELECT USING (true);
-CREATE POLICY "results_insert" ON results FOR INSERT WITH CHECK (true);
-CREATE POLICY "results_update" ON results FOR UPDATE USING (true);
-CREATE POLICY "results_delete" ON results FOR DELETE USING (true);
+CREATE POLICY "results_write"  ON results FOR ALL
+  USING      (auth.role() = 'authenticated')
+  WITH CHECK (auth.role() = 'authenticated');
 
--- Brackets: lectura pública, escritura controlada por adminMode en la app
+-- Brackets: lectura pública, escritura SOLO para admin autenticado via Supabase Auth
 CREATE POLICY "brackets_select" ON brackets FOR SELECT USING (true);
-CREATE POLICY "brackets_insert" ON brackets FOR INSERT WITH CHECK (true);
-CREATE POLICY "brackets_update" ON brackets FOR UPDATE USING (true);
-CREATE POLICY "brackets_delete" ON brackets FOR DELETE USING (true);
+CREATE POLICY "brackets_write"  ON brackets FOR ALL
+  USING      (auth.role() = 'authenticated')
+  WITH CHECK (auth.role() = 'authenticated');
 
 -- 3. REALTIME (sincronización en vivo entre dispositivos)
 

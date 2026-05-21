@@ -92,17 +92,18 @@ async function dbLoad() {
       APP.brackets[b.match_n] = { home: b.home_code, away: b.away_code };
     }
 
-    // Preferencias locales (no se sincronizan entre dispositivos)
+    // Preferencias locales + sesión de Supabase Auth
     const local = JSON.parse(localStorage.getItem(STORAGE_KEY) || "{}");
     APP.following = local.following || [];
-    // Revocar adminMode si el TTL expiró
-    APP.adminMode = (local.adminMode && local.adminModeExpiry && local.adminModeExpiry > Date.now()) ? true : false;
+    // adminMode lo determina la sesión real de Supabase Auth (JWT verificado en servidor)
+    const { data: { session } } = await sb.auth.getSession();
+    APP.adminMode = !!session;
     const myPlayers = getMyPlayers();
     const validForDevice = id => APP.users.some(u => u.id === id) &&
-      (local.adminMode || myPlayers.includes(id));
+      (APP.adminMode || myPlayers.includes(id));
     APP.currentUserId = (local.currentUserId && validForDevice(local.currentUserId))
       ? local.currentUserId
-      : (myPlayers.find(id => APP.users.some(u => u.id === id)) || (local.adminMode ? APP.users[0]?.id : null) || null);
+      : (myPlayers.find(id => APP.users.some(u => u.id === id)) || (APP.adminMode ? APP.users[0]?.id : null) || null);
 
     save();
     setSyncBadge("online");
@@ -198,8 +199,6 @@ function setSyncBadge(state) {
 }
 
 // ====== PERSISTENCIA ======
-const ADMIN_TTL_MS = 4 * 60 * 60 * 1000; // 4 horas
-
 function save() {
   const data = {
     users: APP.users,
@@ -208,8 +207,7 @@ function save() {
     results: APP.results,
     brackets: APP.brackets,
     following: APP.following,
-    adminMode: APP.adminMode,
-    adminModeExpiry: APP.adminMode ? (Date.now() + ADMIN_TTL_MS) : null
+    adminMode: APP.adminMode
   };
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
@@ -229,8 +227,7 @@ function load() {
     APP.results = data.results || {};
     APP.brackets = data.brackets || {};
     APP.following = data.following || [];
-    // Revocar adminMode si el TTL expiró
-    APP.adminMode = (data.adminMode && data.adminModeExpiry && data.adminModeExpiry > Date.now()) ? true : false;
+    APP.adminMode = false; // la sesión admin la verifica Supabase Auth en dbLoad()
   } catch (e) {
     console.warn("No se pudo cargar", e);
   }
@@ -1417,22 +1414,9 @@ function updateUserPill() {
   }
 }
 
-// ====== ADMIN PIN ======
-// Para cambiar el PIN: reemplaza el valor de ADMIN_PIN_HASH
-// con btoa("TU_NUEVO_PIN") en la consola del navegador.
-// Ejemplo: btoa("5678") → "NTY3OA=="
-const ADMIN_PIN_HASH = "NTY3OA==";
-
-function adminExpiryLabel() {
-  const local = JSON.parse(localStorage.getItem(STORAGE_KEY) || "{}");
-  const expiry = local.adminModeExpiry;
-  if (!expiry) return "";
-  const msLeft = expiry - Date.now();
-  if (msLeft <= 0) return "Expira pronto";
-  const h = Math.floor(msLeft / 3600000);
-  const m = Math.floor((msLeft % 3600000) / 60000);
-  return h > 0 ? `Expira en ${h}h ${m}m` : `Expira en ${m}m`;
-}
+// ====== ADMIN AUTH (Supabase Auth) ======
+// La contraseña nunca está en el código — la verifica Supabase en el servidor.
+// Para cambiar la contraseña: Supabase Dashboard → Authentication → Users.
 
 function renderAdminCard() {
   if (APP.adminMode) {
@@ -1443,9 +1427,9 @@ function renderAdminCard() {
             <div style="font-weight:700;font-size:14px;display:flex;align-items:center;gap:6px;">
               <span style="color:var(--red);">●</span> Modo administrador activo
             </div>
-            <div style="font-size:11px;color:var(--text-dim);margin-top:2px;">Puedes registrar resultados oficiales · ${adminExpiryLabel()}</div>
+            <div style="font-size:11px;color:var(--text-dim);margin-top:2px;">Sesión autenticada · puedes registrar resultados</div>
           </div>
-          <button class="btn-secondary" style="white-space:nowrap;font-size:11px;" onclick="disableAdmin()">Desactivar</button>
+          <button class="btn-secondary" style="white-space:nowrap;font-size:11px;" onclick="disableAdmin()">Cerrar sesión</button>
         </div>
       </div>`;
   }
@@ -1453,29 +1437,54 @@ function renderAdminCard() {
   return `
     <div style="background:var(--bg-card);border:1px solid var(--line);border-radius:12px;padding:14px;margin-bottom:12px;">
       <div style="font-weight:700;font-size:14px;margin-bottom:4px;">Modo administrador</div>
-      <div style="font-size:11px;color:var(--text-dim);margin-bottom:10px;">Ingresa el PIN para registrar resultados oficiales</div>
-      <input type="password" id="admin-pin-input" placeholder="PIN de administrador"
-        style="width:100%;background:var(--bg-app);border:1px solid var(--line-2);border-radius:8px;padding:10px 12px;font-size:14px;margin-bottom:10px;">
-      <button class="btn-primary" style="width:100%;" onclick="tryEnableAdmin()">Activar</button>
+      <div style="font-size:11px;color:var(--text-dim);margin-bottom:10px;">Inicia sesión con tu cuenta de administrador</div>
+      <input type="email" id="admin-email-input" placeholder="Email"
+        style="width:100%;background:var(--bg-app);border:1px solid var(--line-2);border-radius:8px;padding:10px 12px;font-size:14px;margin-bottom:8px;" autocomplete="email">
+      <input type="password" id="admin-pass-input" placeholder="Contraseña"
+        style="width:100%;background:var(--bg-app);border:1px solid var(--line-2);border-radius:8px;padding:10px 12px;font-size:14px;margin-bottom:10px;" autocomplete="current-password">
+      <button class="btn-primary" id="admin-login-btn" style="width:100%;" onclick="tryEnableAdmin()">Iniciar sesión</button>
     </div>`;
 }
 
-function tryEnableAdmin() {
-  const pin = (document.getElementById("admin-pin-input")?.value || "").trim();
-  if (!pin || btoa(unescape(encodeURIComponent(pin))) !== ADMIN_PIN_HASH) {
-    toast("PIN incorrecto", "error"); return;
-  }
+async function tryEnableAdmin() {
+  if (!sb) { toast("Sin conexión a Supabase", "error"); return; }
+  const email = (document.getElementById("admin-email-input")?.value  || "").trim();
+  const pass  = (document.getElementById("admin-pass-input")?.value   || "").trim();
+  if (!email || !pass) { toast("Ingresa email y contraseña", "error"); return; }
+
+  const btn = document.getElementById("admin-login-btn");
+  if (btn) { btn.disabled = true; btn.textContent = "Verificando…"; }
+
+  const { error } = await sb.auth.signInWithPassword({ email, password: pass });
+
+  if (btn) { btn.disabled = false; btn.textContent = "Iniciar sesión"; }
+
+  if (error) { toast("Credenciales incorrectas", "error"); return; }
   APP.adminMode = true;
   save();
   toast("Modo administrador activado", "success");
   renderSettings();
 }
 
-function disableAdmin() {
+async function disableAdmin() {
+  if (sb) await sb.auth.signOut();
   APP.adminMode = false;
   save();
-  toast("Modo administrador desactivado");
+  toast("Sesión cerrada");
   renderSettings();
+}
+
+function subscribeAuth() {
+  if (!sb) return;
+  sb.auth.onAuthStateChange((event, session) => {
+    const wasAdmin = APP.adminMode;
+    APP.adminMode = !!session;
+    save();
+    if (wasAdmin && !APP.adminMode) {
+      toast("Sesión admin expirada");
+      renderView(APP.currentView, APP.currentParams || {});
+    }
+  });
 }
 
 window.tryEnableAdmin = tryEnableAdmin;
@@ -1795,6 +1804,7 @@ async function init() {
   }
 
   initSupabase();
+  if (sb) subscribeAuth(); // detecta expiración de sesión admin en tiempo real
   await dbLoad();
   navTo("home", {}, false);
   updateUserPill();
