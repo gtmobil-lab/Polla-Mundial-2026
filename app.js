@@ -1216,6 +1216,9 @@ async function addUser() {
   const input = document.getElementById("new-user-name");
   const name = input.value.trim();
   if (!name) { toast("Ingresa un nombre", "error"); return; }
+  if (!APP.adminMode && APP.users.length >= 2) {
+    toast("Límite de 2 jugadores alcanzado", "error"); return;
+  }
   if (APP.users.some(u => u.name.toLowerCase() === name.toLowerCase())) {
     toast("Ese nombre ya existe", "error"); return;
   }
