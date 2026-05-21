@@ -1517,18 +1517,18 @@ function renderSettings() {
           <div style="font-size:11px;color:var(--text-dim);margin-bottom:12px;">FIFA World Cup 2026™ · Estructura y Formato Oficial</div>
 
           <div style="font-size:12px;font-weight:700;color:var(--red);margin-bottom:6px;text-transform:uppercase;letter-spacing:0.05em;">1. Composición</div>
-          <div style="font-size:12px;color:var(--text-body);line-height:1.6;margin-bottom:12px;">
+          <div style="font-size:12px;color:var(--text-soft);line-height:1.6;margin-bottom:12px;">
             <strong>48 selecciones</strong> divididas en <strong>12 grupos de 4 equipos</strong> (Grupo A al L), coorganizado por Canadá, Estados Unidos y México.
           </div>
 
           <div style="font-size:12px;font-weight:700;color:var(--red);margin-bottom:6px;text-transform:uppercase;letter-spacing:0.05em;">2. Fase de Grupos</div>
-          <div style="font-size:12px;color:var(--text-body);line-height:1.6;margin-bottom:12px;">
+          <div style="font-size:12px;color:var(--text-soft);line-height:1.6;margin-bottom:12px;">
             Todos contra todos a una sola rueda — <strong>3 partidos</strong> por equipo.<br>
             🟢 Victoria: <strong>3 pts</strong> &nbsp;·&nbsp; 🟡 Empate: <strong>1 pt</strong> &nbsp;·&nbsp; 🔴 Derrota: <strong>0 pts</strong>
           </div>
 
           <div style="font-size:12px;font-weight:700;color:var(--red);margin-bottom:6px;text-transform:uppercase;letter-spacing:0.05em;">3. Clasifican a Dieciseisavos</div>
-          <div style="font-size:12px;color:var(--text-body);line-height:1.6;margin-bottom:12px;">
+          <div style="font-size:12px;color:var(--text-soft);line-height:1.6;margin-bottom:12px;">
             <strong>32 equipos</strong> avanzan a la fase eliminatoria:<br>
             • 1° de cada grupo (12 eq.)<br>
             • 2° de cada grupo (12 eq.)<br>
@@ -1536,7 +1536,7 @@ function renderSettings() {
           </div>
 
           <div style="font-size:12px;font-weight:700;color:var(--red);margin-bottom:8px;text-transform:uppercase;letter-spacing:0.05em;">4. Criterios de Desempate en Grupo</div>
-          <div style="font-size:11px;color:var(--text-body);line-height:1.7;margin-bottom:12px;">
+          <div style="font-size:11px;color:var(--text-soft);line-height:1.7;margin-bottom:12px;">
             <div style="display:grid;grid-template-columns:24px 1fr;gap:3px 8px;">
               <span style="color:var(--text-dim);">1°</span><span>Diferencia de goles general (GF − GC)</span>
               <span style="color:var(--text-dim);">2°</span><span>Mayor cantidad de goles a favor</span>
@@ -1549,12 +1549,12 @@ function renderSettings() {
           </div>
 
           <div style="font-size:12px;font-weight:700;color:var(--red);margin-bottom:8px;text-transform:uppercase;letter-spacing:0.05em;">5. Mejores 8 Terceros</div>
-          <div style="font-size:11px;color:var(--text-body);line-height:1.7;margin-bottom:12px;">
+          <div style="font-size:11px;color:var(--text-soft);line-height:1.7;margin-bottom:12px;">
             Comparación entre los 12 terceros por: Puntos → Diferencia goles → Goles a favor → Fair Play → Sorteo FIFA
           </div>
 
           <div style="font-size:12px;font-weight:700;color:var(--red);margin-bottom:6px;text-transform:uppercase;letter-spacing:0.05em;">6. Fase Eliminatoria</div>
-          <div style="font-size:12px;color:var(--text-body);line-height:1.6;margin-bottom:12px;">
+          <div style="font-size:12px;color:var(--text-soft);line-height:1.6;margin-bottom:12px;">
             Partido único por eliminación. Si hay empate a los 90 min → <strong>prórroga 2×15 min</strong>. Si persiste → <strong>penales</strong>.<br><br>
             <strong>Ruta al título (6 fases):</strong><br>
             Dieciseisavos → Octavos → Cuartos → Semis → 3er Puesto / Final<br>
