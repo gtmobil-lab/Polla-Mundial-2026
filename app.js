@@ -1105,16 +1105,17 @@ function renderRanking() {
           <p>Sin jugadores aún. Agrega el primero arriba.</p>
         </div>
       ` : ranking.map((u, i) => `
-        <div class="ranking-row ${u.id === APP.currentUserId ? 'current' : ''} ${i === 0 && u.pts > 0 ? 'top1' : i === 1 ? 'top2' : i === 2 ? 'top3' : ''}">
+        <div class="ranking-row ${u.id === APP.currentUserId ? 'current' : ''} ${i === 0 && u.pts > 0 ? 'top1' : i === 1 ? 'top2' : i === 2 ? 'top3' : ''}"
+          ${APP.adminMode ? `onclick="openPredictionsModal('${u.id}')" style="cursor:pointer;"` : ''}>
           <div class="rank-pos">${i + 1}°</div>
           <div class="rank-user">
             <div class="name">${u.id === APP.currentUserId ? '👤 ' : ''}${escHtml(u.name)}</div>
-            <div class="stats">${u.exact} exacto${u.exact !== 1 ? 's' : ''} · ${u.outcome} resultado${u.outcome !== 1 ? 's' : ''} · ${u.total} predich${u.total !== 1 ? 'os' : 'o'}</div>
+            <div class="stats">${u.exact} exacto${u.exact !== 1 ? 's' : ''} · ${u.outcome} resultado${u.outcome !== 1 ? 's' : ''} · ${u.total} predich${u.total !== 1 ? 'os' : 'o'}${APP.adminMode ? ' · <span style="color:var(--text-dim);font-size:10px;">toca para ver predicciones</span>' : ''}</div>
           </div>
           <div>
             <div class="rank-points">${u.pts}<small>PTS</small></div>
           </div>
-          <button class="user-delete-btn" onclick="deleteUser('${u.id}')" title="Eliminar">✕</button>
+          ${APP.adminMode ? `<button class="user-delete-btn" onclick="event.stopPropagation(); deleteUser('${u.id}')" title="Eliminar">✕</button>` : ''}
         </div>
       `).join("")}
 
@@ -1125,6 +1126,90 @@ function renderRanking() {
       </div>
     </div>
   `;
+}
+
+function openPredictionsModal(userId) {
+  const user = APP.users.find(u => u.id === userId);
+  if (!user) return;
+
+  const userPreds = APP.predictions[userId] || {};
+  const playedMatches = MATCHES.filter(m => APP.results[m.n]);
+
+  const rows = playedMatches.map(m => {
+    const pred  = userPreds[m.n];
+    const result = APP.results[m.n];
+    const score  = pred ? scorePrediction(pred, result) : null;
+    const resolved = resolveMatchTeams(m.n);
+    const homeTeam = resolved.home ? TEAMS[resolved.home] : null;
+    const awayTeam = resolved.away ? TEAMS[resolved.away] : null;
+    const teamLabel = homeTeam && awayTeam
+      ? `${homeTeam.flag} ${homeTeam.name} vs ${awayTeam.flag} ${awayTeam.name}`
+      : m.placeholder || `Partido #${m.n}`;
+
+    let badgeHtml = '';
+    if (!pred) {
+      badgeHtml = `<span style="font-size:10px;color:var(--text-dim);font-family:'JetBrains Mono',monospace;">sin predicción</span>`;
+    } else if (score?.type === 'exact') {
+      badgeHtml = `<span style="color:#4ade80;font-weight:700;">✓ ${pred.h}-${pred.a} · +5 pts</span>`;
+    } else if (score?.type === 'outcome') {
+      badgeHtml = `<span style="color:var(--gold);font-weight:700;">✓ ${pred.h}-${pred.a} · +2 pts</span>`;
+    } else {
+      badgeHtml = `<span style="color:var(--red);">✗ ${pred.h}-${pred.a} · 0 pts</span>`;
+    }
+
+    return `
+      <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid var(--line);gap:8px;flex-wrap:wrap;">
+        <div style="flex:1;min-width:0;">
+          <div style="font-size:11px;color:var(--text-dim);font-family:'JetBrains Mono',monospace;margin-bottom:2px;">#${String(m.n).padStart(3,'0')} · ${m.stage}</div>
+          <div style="font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${teamLabel}</div>
+        </div>
+        <div style="text-align:right;flex-shrink:0;">
+          <div style="font-size:11px;color:var(--text-dim);margin-bottom:2px;">Resultado: <strong>${result.h}-${result.a}</strong></div>
+          <div style="font-size:12px;">${badgeHtml}</div>
+        </div>
+      </div>`;
+  });
+
+  const totalPts  = playedMatches.reduce((acc, m) => {
+    const pred = userPreds[m.n];
+    const sc   = pred ? scorePrediction(pred, APP.results[m.n]) : null;
+    return acc + (sc?.pts || 0);
+  }, 0);
+  const exact   = playedMatches.filter(m => { const p = userPreds[m.n]; return p && scorePrediction(p, APP.results[m.n])?.type === 'exact'; }).length;
+  const outcome = playedMatches.filter(m => { const p = userPreds[m.n]; return p && scorePrediction(p, APP.results[m.n])?.type === 'outcome'; }).length;
+  const missed  = playedMatches.filter(m => { const p = userPreds[m.n]; return p && scorePrediction(p, APP.results[m.n])?.type === 'miss'; }).length;
+  const noPred  = playedMatches.filter(m => !userPreds[m.n]).length;
+
+  const modalContent = document.getElementById("modal-content");
+  modalContent.innerHTML = `
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+      <h3 style="margin:0;">${escHtml(user.name)}</h3>
+      <button onclick="closeModal()" style="background:none;border:none;color:var(--text-dim);font-size:20px;cursor:pointer;padding:0;">✕</button>
+    </div>
+    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-bottom:14px;text-align:center;">
+      <div style="background:var(--bg-app);border-radius:8px;padding:8px 4px;">
+        <div style="font-size:18px;font-weight:700;color:#4ade80;">${exact}</div>
+        <div style="font-size:9px;color:var(--text-dim);text-transform:uppercase;">Exactos</div>
+      </div>
+      <div style="background:var(--bg-app);border-radius:8px;padding:8px 4px;">
+        <div style="font-size:18px;font-weight:700;color:var(--gold);">${outcome}</div>
+        <div style="font-size:9px;color:var(--text-dim);text-transform:uppercase;">Resultado</div>
+      </div>
+      <div style="background:var(--bg-app);border-radius:8px;padding:8px 4px;">
+        <div style="font-size:18px;font-weight:700;color:var(--red);">${missed}</div>
+        <div style="font-size:9px;color:var(--text-dim);text-transform:uppercase;">Fallados</div>
+      </div>
+      <div style="background:var(--bg-app);border-radius:8px;padding:8px 4px;">
+        <div style="font-size:18px;font-weight:700;">${totalPts}</div>
+        <div style="font-size:9px;color:var(--text-dim);text-transform:uppercase;">Pts total</div>
+      </div>
+    </div>
+    ${noPred > 0 ? `<div style="font-size:11px;color:var(--text-dim);margin-bottom:10px;">Sin predicción en ${noPred} partido${noPred!==1?'s':''} jugado${noPred!==1?'s':''}</div>` : ''}
+    ${playedMatches.length === 0
+      ? `<div style="text-align:center;padding:20px;color:var(--text-dim);">Aún no hay partidos jugados</div>`
+      : `<div style="max-height:55vh;overflow-y:auto;-webkit-overflow-scrolling:touch;">${rows.join('')}</div>`}
+  `;
+  document.getElementById("modal-bg").classList.add("open");
 }
 
 async function addUser() {
@@ -1526,6 +1611,7 @@ window.goBack = goBack;
 window.toggleFollow = toggleFollow;
 window.addUser = addUser;
 window.deleteUser = deleteUser;
+window.openPredictionsModal = openPredictionsModal;
 window.switchUser = switchUser;
 window.closeModal = closeModal;
 window.exportData = exportData;
