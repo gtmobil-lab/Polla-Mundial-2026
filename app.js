@@ -650,40 +650,34 @@ function matchCardHTML(m, opts = { showPred: true, showAdmin: false }) {
 
 function attachMatchCardHandlers() {
   document.querySelectorAll("[data-save-pred]").forEach(btn => {
-    btn.addEventListener("click", e => {
-      const n = parseInt(btn.dataset.savePred);
-      savePrediction(n);
-    });
+    btn.addEventListener("click", () => savePrediction(parseInt(btn.dataset.savePred), btn));
   });
 
   document.querySelectorAll("[data-save-result]").forEach(btn => {
-    btn.addEventListener("click", e => {
-      const n = parseInt(btn.dataset.saveResult);
-      saveResult(n);
-    });
+    btn.addEventListener("click", () => saveResult(parseInt(btn.dataset.saveResult), btn));
   });
 
   document.querySelectorAll("[data-clear-result]").forEach(btn => {
-    btn.addEventListener("click", async e => {
+    btn.addEventListener("click", async () => {
       const n = parseInt(btn.dataset.clearResult);
       delete APP.results[n];
       save();
       toast("Resultado borrado", "success");
       renderView(APP.currentView, APP.currentParams);
-      try { await dbDeleteResult(n); } catch(e2) { /* estado local ya actualizado */ }
+      try { await dbDeleteResult(n); } catch(e) { /* estado local ya actualizado */ }
     });
   });
 }
 
-async function savePrediction(n) {
+async function savePrediction(n, btn) {
   if (!APP.currentUserId) { toast("Crea un usuario primero", "error"); return; }
   const m = getMatch(n);
   if (matchHasStarted(m)) { toast("El partido ya comenzó", "error"); return; }
 
-  const activeView = document.querySelector(".view.active");
-  const scope = activeView || document;
-  const hInput = scope.querySelector(`input[data-pred="${n}"][data-side="h"]`);
-  const aInput = scope.querySelector(`input[data-pred="${n}"][data-side="a"]`);
+  // Busca los inputs dentro del mismo .pred-zone del botón pulsado
+  const zone = btn.closest(".pred-zone");
+  const hInput = zone?.querySelector(`input[data-pred="${n}"][data-side="h"]`);
+  const aInput = zone?.querySelector(`input[data-pred="${n}"][data-side="a"]`);
   const h = parseInt(hInput?.value);
   const a = parseInt(aInput?.value);
 
@@ -699,11 +693,11 @@ async function savePrediction(n) {
   try { await dbUpsertPrediction(APP.currentUserId, n, h, a); } catch(e) { /* estado local ya actualizado */ }
 }
 
-async function saveResult(n) {
-  const activeView = document.querySelector(".view.active");
-  const scope = activeView || document;
-  const hInput = scope.querySelector(`input[data-result="${n}"][data-side="h"]`);
-  const aInput = scope.querySelector(`input[data-result="${n}"][data-side="a"]`);
+async function saveResult(n, btn) {
+  // Busca los inputs dentro del mismo .admin-result del botón pulsado
+  const zone = btn.closest(".admin-result");
+  const hInput = zone?.querySelector(`input[data-result="${n}"][data-side="h"]`);
+  const aInput = zone?.querySelector(`input[data-result="${n}"][data-side="a"]`);
   const h = parseInt(hInput?.value);
   const a = parseInt(aInput?.value);
 
