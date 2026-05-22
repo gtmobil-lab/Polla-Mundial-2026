@@ -1491,6 +1491,15 @@ window.tryEnableAdmin = tryEnableAdmin;
 window.disableAdmin   = disableAdmin;
 
 // ====== AJUSTES ======
+function toggleManualCard() {
+  const body    = document.getElementById("manual-card-body");
+  const chevron = document.getElementById("manual-chevron");
+  const open    = body.style.display === "none";
+  body.style.display    = open ? "block" : "none";
+  chevron.style.transform = open ? "rotate(90deg)" : "";
+}
+window.toggleManualCard = toggleManualCard;
+
 function toggleRulesCard() {
   const body    = document.getElementById("rules-card-body");
   const chevron = document.getElementById("rules-chevron");
@@ -1508,6 +1517,71 @@ function renderSettings() {
       <div class="section-sub">Configuración general</div>
 
       ${renderAdminCard()}
+
+      <div style="background: var(--bg-card); border: 1px solid var(--line); border-radius: 12px; margin-bottom: 12px; overflow: hidden;">
+        <button onclick="toggleManualCard()" style="width:100%;display:flex;align-items:center;justify-content:space-between;padding:14px;background:none;border:none;cursor:pointer;color:inherit;">
+          <span style="font-weight:700;font-size:14px;">📖 Cómo jugar</span>
+          <span id="manual-chevron" style="font-size:18px;color:var(--text-dim);transition:transform 0.2s;">›</span>
+        </button>
+        <div id="manual-card-body" style="display:none;padding:0 14px 14px;">
+
+          <div style="font-size:11px;color:var(--text-dim);margin-bottom:12px;">Guía rápida para jugadores · Polla Casa Estadio 2026</div>
+
+          <div style="font-size:12px;font-weight:700;color:var(--red);margin-bottom:6px;text-transform:uppercase;letter-spacing:0.05em;">1. Crear tu perfil</div>
+          <div style="font-size:12px;color:var(--text-soft);line-height:1.6;margin-bottom:12px;">
+            Toca el botón con tu nombre (arriba a la derecha). Si dice <em>"Sin jugador"</em>, toca <strong>＋ Nuevo jugador</strong>, escribe tu nombre y presiona <strong>Crear</strong>. Puedes tener hasta 2 jugadores por dispositivo.
+          </div>
+
+          <div style="font-size:12px;font-weight:700;color:var(--red);margin-bottom:6px;text-transform:uppercase;letter-spacing:0.05em;">2. Predecir — Fase de Grupos</div>
+          <div style="font-size:12px;color:var(--text-soft);line-height:1.6;margin-bottom:12px;">
+            Ve a <strong>Inicio</strong> y toca cualquier grupo (ej. "GRUPO A"). Escribe el marcador que crees que va a terminar cada partido y toca <strong>Guardar</strong>.
+          </div>
+
+          <div style="font-size:12px;font-weight:700;color:var(--red);margin-bottom:6px;text-transform:uppercase;letter-spacing:0.05em;">3. Predecir — Fase KO</div>
+          <div style="font-size:12px;color:var(--text-soft);line-height:1.6;margin-bottom:12px;">
+            Los partidos eliminatorios aparecen en <strong>Inicio → Fase KO</strong>. Los equipos se completan automáticamente a medida que avanzan en el torneo. Predice igual: escribe el marcador y guarda.
+          </div>
+
+          <div style="font-size:12px;font-weight:700;color:var(--red);margin-bottom:8px;text-transform:uppercase;letter-spacing:0.05em;">4. Sistema de puntos</div>
+          <div style="font-size:12px;color:var(--text-soft);line-height:1.7;margin-bottom:12px;">
+            <div style="display:grid;grid-template-columns:28px 1fr;gap:4px 8px;align-items:start;">
+              <span style="font-weight:700;color:var(--gold);">+5</span><span><strong>Resultado exacto</strong> — acertaste el marcador preciso (ej. 2-1 y terminó 2-1)</span>
+              <span style="font-weight:700;color:var(--green);">+2</span><span><strong>Resultado correcto</strong> — acertaste el ganador o el empate, pero no el marcador exacto</span>
+              <span style="font-weight:700;color:var(--text-dim);">0</span><span><strong>Fallo</strong> — el resultado fue distinto al tuyo</span>
+            </div>
+          </div>
+
+          <div style="font-size:12px;font-weight:700;color:var(--red);margin-bottom:6px;text-transform:uppercase;letter-spacing:0.05em;">5. Cierre de predicciones</div>
+          <div style="font-size:12px;color:var(--text-soft);line-height:1.6;margin-bottom:12px;">
+            Las predicciones se cierran automáticamente cuando comienza el partido. <strong>Una vez que el partido empieza, ya no puedes cambiar tu pronóstico.</strong>
+          </div>
+
+          <div style="font-size:12px;font-weight:700;color:var(--red);margin-bottom:6px;text-transform:uppercase;letter-spacing:0.05em;">6. Ranking</div>
+          <div style="font-size:12px;color:var(--text-soft);line-height:1.6;margin-bottom:12px;">
+            La pestaña <strong>Ranking</strong> muestra los puntos de todos los jugadores. Se actualiza en tiempo real cada vez que el administrador ingresa un resultado oficial.
+          </div>
+
+          <div style="font-size:12px;font-weight:700;color:var(--red);margin-bottom:6px;text-transform:uppercase;letter-spacing:0.05em;">7. Seguir equipos</div>
+          <div style="font-size:12px;color:var(--text-soft);line-height:1.6;margin-bottom:12px;">
+            Ve a la pestaña <strong>Equipos</strong> y toca ⭐ junto a tu selección favorita. Aparecerá destacada en todos sus partidos.
+          </div>
+
+          <div style="font-size:12px;font-weight:700;color:var(--red);margin-bottom:6px;text-transform:uppercase;letter-spacing:0.05em;">8. Instalar la app</div>
+          <div style="font-size:12px;color:var(--text-soft);line-height:1.6;margin-bottom:12px;">
+            <strong>Android (Chrome):</strong> menú ⋮ → "Instalar app" o "Agregar a pantalla de inicio".<br>
+            <strong>iPhone (Safari):</strong> botón compartir □↑ → "Agregar a pantalla de inicio".
+          </div>
+
+          <div style="font-size:12px;font-weight:700;color:var(--red);margin-bottom:6px;text-transform:uppercase;letter-spacing:0.05em;">9. Sin conexión</div>
+          <div style="font-size:12px;color:var(--text-soft);line-height:1.6;margin-bottom:4px;">
+            La app funciona offline mostrando los últimos datos guardados. Al reconectarte se sincroniza automáticamente con el servidor.
+          </div>
+
+          <div style="font-size:10px;color:var(--text-faint);font-family:'JetBrains Mono',monospace;padding-top:12px;border-top:1px solid var(--line);">
+            ¿Dudas? Consulta al administrador de la polla
+          </div>
+        </div>
+      </div>
 
       <div style="background: var(--bg-card); border: 1px solid var(--line); border-radius: 12px; padding: 14px; margin-bottom: 12px;">
         <div style="font-weight: 700; font-size: 14px; margin-bottom: 10px;">Datos</div>
