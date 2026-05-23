@@ -343,6 +343,31 @@ function scorePrediction(pred, result, match) {
   return { pts: 0, type: "miss", bonus: 0 };
 }
 
+function phaseLeader(phase) {
+  // phase: 'grupos' | 'ko' | 'total'
+  if (phase === 'total') {
+    const r = userRanking();
+    return r.length > 0 && r[0].pts > 0 ? r[0].name : null;
+  }
+  const scores = APP.users.map(u => {
+    let pts = 0;
+    const userPreds = APP.predictions[u.id] || {};
+    Object.entries(userPreds).forEach(([n, pred]) => {
+      const result = APP.results[n];
+      if (!result) return;
+      const match = getMatch(parseInt(n));
+      if (!match) return;
+      const isKO = KO_STAGES_SET.has(match.group);
+      if (phase === 'grupos' && isKO) return;
+      if (phase === 'ko' && !isKO) return;
+      const s = scorePrediction(pred, result, match);
+      if (s) pts += s.pts;
+    });
+    return { name: u.name, pts };
+  }).filter(u => u.pts > 0).sort((a, b) => b.pts - a.pts);
+  return scores.length > 0 ? scores[0].name : null;
+}
+
 function userRanking() {
   return APP.users.map(u => {
     let pts = 0, exact = 0, outcome = 0, miss = 0, total = 0;
@@ -1311,7 +1336,7 @@ function renderRanking() {
       <div class="section-sub">Polla Mundial 26</div>
 
       <div class="prizes-section">
-        <div class="prizes-title">🏆 PREMIOS CASA ESTADIO</div>
+        <div class="prizes-title">🏆 MEJOR JUGADOR</div>
         <div class="prizes-grid">
           <div class="prize-card">
             <div class="prize-card-icon">🥉</div>
@@ -1319,7 +1344,7 @@ function renderRanking() {
               <div class="prize-phase">FASE DE GRUPOS</div>
               <div class="prize-desc">Mejor ranking al cierre de la fase de grupos</div>
             </div>
-            <div class="prize-value">Por definir</div>
+            <div class="prize-value">${phaseLeader('grupos') || 'Por definir'}</div>
           </div>
           <div class="prize-card">
             <div class="prize-card-icon">🥈</div>
@@ -1327,7 +1352,7 @@ function renderRanking() {
               <div class="prize-phase">ELIMINATORIAS</div>
               <div class="prize-desc">Mejor ranking en las rondas eliminatorias</div>
             </div>
-            <div class="prize-value">Por definir</div>
+            <div class="prize-value">${phaseLeader('ko') || 'Por definir'}</div>
           </div>
           <div class="prize-card prize-card--final">
             <div class="prize-card-icon">🥇</div>
@@ -1335,10 +1360,9 @@ function renderRanking() {
               <div class="prize-phase">CAMPEÓN FINAL</div>
               <div class="prize-desc">Mejor ranking al término del torneo</div>
             </div>
-            <div class="prize-value">Por definir</div>
+            <div class="prize-value">${phaseLeader('total') || 'Por definir'}</div>
           </div>
         </div>
-        <p class="prizes-sponsor-note">Premios aportados por <a href="https://www.instagram.com/lacasaestadio/" target="_blank" rel="noopener">@lacasaestadio</a></p>
       </div>
 
       <div class="user-add-card">
@@ -1680,7 +1704,7 @@ function renderSettings() {
         </button>
         <div id="manual-card-body" style="display:none;padding:0 14px 14px;">
 
-          <div style="font-size:11px;color:var(--text-dim);margin-bottom:12px;">Guía rápida para jugadores · Polla Casa Estadio 2026</div>
+          <div style="font-size:11px;color:var(--text-dim);margin-bottom:12px;">Guía rápida para jugadores · Polla Mundial 2026</div>
 
           <div style="font-size:12px;font-weight:700;color:var(--red);margin-bottom:6px;text-transform:uppercase;letter-spacing:0.05em;">1. Crear tu perfil</div>
           <div style="font-size:12px;color:var(--text-soft);line-height:1.6;margin-bottom:12px;">
@@ -1847,7 +1871,7 @@ function renderSettings() {
       </div>
 
       <div style="text-align: center; font-size: 10px; color: var(--text-faint); padding: 16px 0; font-family: 'JetBrains Mono', monospace; letter-spacing: 0.1em;">
-        Polla Casa Estadio · v1.2<br>
+        Polla Mundial 2026 · v1.2<br>
         Horarios en hora Chile (CLT, UTC-4)
       </div>
     </div>
