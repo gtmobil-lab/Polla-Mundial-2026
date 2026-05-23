@@ -127,6 +127,201 @@ input:not([type="checkbox"]):not([type="radio"]) { -webkit-appearance: none; app
 }
 
 /* ============================================================
+   FLAG IMAGES — cross-platform (reemplaza emoji de bandera en Windows)
+   height:1em hereda el font-size de cada contenedor automáticamente
+   ============================================================ */
+img.flag-img {
+  height: 1em;
+  width: auto;
+  vertical-align: middle;
+  border-radius: 2px;
+  display: inline-block;
+  flex-shrink: 0;
+}
+.team-detail-flag img.flag-img {
+  height: 72px;
+  border-radius: 6px;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.3);
+}
+.flag-lg img.flag-img {
+  height: 32px;
+  border-radius: 3px;
+}
+.group-tile-flags img.flag-img {
+  height: 18px;
+  border-radius: 2px;
+  margin: 0 1px;
+}
+
+/* ============================================================
+   SPONSOR BANNER — Casa Estadio
+   ============================================================ */
+.sponsor-bar {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 7px 16px;
+  background: #0f0f0f;
+  border-bottom: 2px solid var(--gold);
+  z-index: 90;
+}
+.sponsor-logo {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 2px solid var(--gold);
+  flex-shrink: 0;
+}
+.sponsor-text {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.15;
+  flex: 1;
+  min-width: 0;
+}
+.sponsor-label {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 8px;
+  letter-spacing: 0.16em;
+  color: var(--gold);
+  text-transform: uppercase;
+}
+.sponsor-name {
+  font-family: 'Bebas Neue', sans-serif;
+  font-size: 17px;
+  color: #ffffff;
+  letter-spacing: 0.05em;
+}
+.sponsor-socials {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+}
+.sponsor-social-link {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 7px;
+  color: rgba(255,255,255,0.55);
+  background: rgba(255,255,255,0.07);
+  transition: color 0.15s, background 0.15s;
+  text-decoration: none;
+}
+.sponsor-social-link svg {
+  width: 15px;
+  height: 15px;
+}
+.sponsor-social-link:active {
+  transform: scale(0.92);
+}
+.sponsor-social-link[data-network="instagram"]:hover,
+.sponsor-social-link[data-network="instagram"]:focus {
+  color: #e1306c;
+  background: rgba(225,48,108,0.15);
+}
+.sponsor-social-link[data-network="facebook"]:hover,
+.sponsor-social-link[data-network="facebook"]:focus {
+  color: #1877f2;
+  background: rgba(24,119,242,0.15);
+}
+.sponsor-social-link[data-network="twitter"]:hover,
+.sponsor-social-link[data-network="twitter"]:focus {
+  color: #ffffff;
+  background: rgba(255,255,255,0.15);
+}
+.sponsor-social-link[data-network="youtube"]:hover,
+.sponsor-social-link[data-network="youtube"]:focus {
+  color: #ff0000;
+  background: rgba(255,0,0,0.15);
+}
+
+/* ============================================================
+   PREMIOS — sección en Ranking
+   ============================================================ */
+.prizes-section {
+  margin-bottom: 16px;
+}
+.prizes-title {
+  font-family: 'Bebas Neue', sans-serif;
+  font-size: 15px;
+  letter-spacing: 0.08em;
+  color: var(--text);
+  margin-bottom: 8px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.prizes-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.prize-card {
+  background: var(--bg-card);
+  border: 1px solid var(--line);
+  border-left: 4px solid var(--gold);
+  border-radius: 10px;
+  padding: 10px 12px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.prize-card--final {
+  border-left-color: var(--red);
+  background: linear-gradient(135deg, #fff8f0, #ffffff);
+}
+.prize-card-icon {
+  font-size: 22px;
+  flex-shrink: 0;
+  width: 32px;
+  text-align: center;
+}
+.prize-card-body {
+  flex: 1;
+  min-width: 0;
+}
+.prize-phase {
+  font-family: 'Bebas Neue', sans-serif;
+  font-size: 14px;
+  letter-spacing: 0.06em;
+  color: var(--text);
+  line-height: 1;
+}
+.prize-desc {
+  font-size: 10px;
+  color: var(--text-dim);
+  margin-top: 1px;
+}
+.prize-value {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--gold);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.prize-card--final .prize-value {
+  color: var(--red);
+}
+.prizes-sponsor-note {
+  font-size: 10px;
+  color: var(--text-dim);
+  text-align: center;
+  margin-top: 6px;
+}
+.prizes-sponsor-note a {
+  color: var(--gold);
+  text-decoration: none;
+}
+
+/* ============================================================
    BOTTOM NAV
    ============================================================ */
 .bottom-nav {

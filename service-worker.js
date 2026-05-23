@@ -1,6 +1,6 @@
 // Service Worker - Pollita Mundial 2026
 // IMPORTANTE: Bumpar CACHE_VERSION con cada deploy significativo
-const CACHE_VERSION = "v3";
+const CACHE_VERSION = "v5";
 const CACHE_NAME = "mundial2026-" + CACHE_VERSION;
 
 // Assets estáticos: cache-first (no cambian entre deploys)
@@ -91,4 +91,30 @@ self.addEventListener("fetch", event => {
       }).catch(() => caches.match("./index.html"))
     );
   }
+});
+
+// ====== PUSH NOTIFICATIONS ======
+self.addEventListener("push", event => {
+  const data = event.data ? event.data.json() : {};
+  event.waitUntil(
+    self.registration.showNotification(data.title || "Polla Casa Estadio", {
+      body:  data.body  || "",
+      icon:  "./icon-192.png",
+      badge: "./icon-192.png",
+      data:  { url: data.url || "/" }
+    })
+  );
+});
+
+self.addEventListener("notificationclick", event => {
+  event.notification.close();
+  const targetUrl = event.notification.data?.url || "/";
+  event.waitUntil(
+    clients.matchAll({ type: "window", includeUncontrolled: true }).then(list => {
+      for (const client of list) {
+        if ("focus" in client) return client.focus();
+      }
+      return clients.openWindow(targetUrl);
+    })
+  );
 });

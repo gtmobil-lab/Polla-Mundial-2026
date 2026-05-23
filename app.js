@@ -5,8 +5,8 @@
 const APP = {
   users: [],
   currentUserId: null,
-  predictions: {},   // { userId: { matchN: {h, a} } }
-  results: {},       // { matchN: {h, a} }
+  predictions: {},   // { userId: { matchN: {h, a, pk_winner} } }
+  results: {},       // { matchN: {h, a, home_et, away_et, home_pk, away_pk} }
   brackets: {},      // { matchN: { home: teamCode, away: teamCode } } — overrides admin
   following: [],     // array de códigos de equipo
   adminMode: false,  // permite editar resultados
@@ -16,6 +16,37 @@ const APP = {
 
 const STORAGE_KEY    = "mundial2026_v1";
 const MY_PLAYERS_KEY = "mw26_mine_v1"; // IDs creados en este dispositivo (no se sincroniza)
+const PUSH_KEY       = "mw26_push_v1"; // flag: notificaciones push activadas en este dispositivo
+
+const VAPID_PUBLIC_KEY = "BKE2Y2DrKzRRgPEPuozY6F3vEj8BRQ4CEJBql46wwhsKaEFyBx1Y53dPSq8URRKuIfB2atVQ3LfFzkoLxR_BQLo";
+
+function urlBase64ToUint8Array(b64) {
+  const pad = "=".repeat((4 - b64.length % 4) % 4);
+  const raw = atob((b64 + pad).replace(/-/g, "+").replace(/_/g, "/"));
+  return Uint8Array.from([...raw].map(c => c.charCodeAt(0)));
+}
+
+// ====== FLAG IMAGES ======
+// Convierte código de equipo → <img> desde flagcdn.com para compatibilidad cross-platform
+// (Windows Desktop no renderiza emoji de banderas Unicode)
+function flagImg(teamCode) {
+  const team = TEAMS[teamCode];
+  if (!team) return '';
+  let iso2;
+  // Subdivisiones especiales que no usan Regional Indicator Symbols
+  if (teamCode === 'SCO') iso2 = 'gb-sct';
+  else if (teamCode === 'ENG') iso2 = 'gb-eng';
+  else {
+    // Los emoji de bandera son dos Regional Indicator Symbols (U+1F1E6..U+1F1FF = A..Z)
+    const pts = [...team.flag]
+      .map(c => c.codePointAt(0))
+      .filter(p => p >= 0x1F1E6 && p <= 0x1F1FF);
+    if (pts.length >= 2)
+      iso2 = pts.slice(0, 2).map(p => String.fromCharCode(p - 0x1F1E6 + 97)).join('');
+  }
+  if (!iso2) return team.flag; // fallback emoji si falla la conversión
+  return `<img class="flag-img" src="https://flagcdn.com/w40/${iso2}.png" alt="${team.name}" loading="lazy">`;
+}
 
 function getMyPlayers() {
   try { return JSON.parse(localStorage.getItem(MY_PLAYERS_KEY) || "[]"); } catch(e) { return []; }
@@ -70,8 +101,8 @@ async function dbLoad() {
       { data: bracks,  error: e4 }
     ] = await Promise.all([
       sb.from("players").select("id, name").order("created_at"),
-      sb.from("predictions").select("player_id, match_n, home_score, away_score"),
-      sb.from("results").select("match_n, home_score, away_score"),
+      sb.from("predictions").select("player_id, match_n, home_score, away_score, pk_winner"),
+      sb.from("results").select("match_n, home_score, away_score, home_et, away_et, home_pk, away_pk"),
       sb.from("brackets").select("match_n, home_code, away_code")
     ]);
     if (e1 || e2 || e3 || e4) throw new Error(e1?.message || e2?.message || e3?.message || e4?.message);
@@ -81,11 +112,17 @@ async function dbLoad() {
     APP.predictions = {};
     for (const p of (preds || [])) {
       if (!APP.predictions[p.player_id]) APP.predictions[p.player_id] = {};
-      APP.predictions[p.player_id][p.match_n] = { h: p.home_score, a: p.away_score };
+      APP.predictions[p.player_id][p.match_n] = { h: p.home_score, a: p.away_score, pk_winner: p.pk_winner ?? null };
     }
 
     APP.results = {};
-    for (const r of (res || [])) APP.results[r.match_n] = { h: r.home_score, a: r.away_score };
+    for (const r of (res || [])) {
+      APP.results[r.match_n] = {
+        h: r.home_score, a: r.away_score,
+        home_et: r.home_et ?? null, away_et: r.away_et ?? null,
+        home_pk: r.home_pk ?? null, away_pk: r.away_pk ?? null
+      };
+    }
 
     APP.brackets = {};
     for (const b of (bracks || [])) {
@@ -131,19 +168,19 @@ async function dbDeletePlayer(id) {
   if (error) throw error;
 }
 
-async function dbUpsertPrediction(playerId, matchN, h, a) {
+async function dbUpsertPrediction(playerId, matchN, h, a, pkWinner = null) {
   if (!sb) return;
   const { error } = await sb.from("predictions").upsert(
-    { player_id: playerId, match_n: matchN, home_score: h, away_score: a, updated_at: new Date().toISOString() },
+    { player_id: playerId, match_n: matchN, home_score: h, away_score: a, pk_winner: pkWinner, updated_at: new Date().toISOString() },
     { onConflict: "player_id,match_n" }
   );
   if (error) throw error;
 }
 
-async function dbUpsertResult(matchN, h, a) {
+async function dbUpsertResult(matchN, h, a, homeEt = null, awayEt = null, homePk = null, awayPk = null) {
   if (!sb) return;
   const { error } = await sb.from("results").upsert(
-    { match_n: matchN, home_score: h, away_score: a },
+    { match_n: matchN, home_score: h, away_score: a, home_et: homeEt, away_et: awayEt, home_pk: homePk, away_pk: awayPk },
     { onConflict: "match_n" }
   );
   if (error) throw error;
@@ -291,13 +328,19 @@ function toast(msg, type = "") {
 //  - Resultado exacto: 5 pts
 //  - Resultado correcto (ganador/empate, sin marcador exacto): 2 pts
 //  - Sin acierto: 0 pts
-function scorePrediction(pred, result) {
+function scorePrediction(pred, result, match) {
   if (!pred || !result) return null;
-  if (pred.h === result.h && pred.a === result.a) return { pts: 5, type: "exact" };
+  // Bonus de +1 si el partido fue a penales y el jugador predijo al ganador correcto
+  let bonus = 0;
+  if (match && KO_STAGES_SET.has(match.group) && result.home_pk !== null && result.home_pk !== null) {
+    const pkWinner = result.home_pk > result.away_pk ? "H" : "A";
+    if (pred.pk_winner === pkWinner) bonus = 1;
+  }
+  if (pred.h === result.h && pred.a === result.a) return { pts: 5 + bonus, type: "exact", bonus };
   const predOutcome = pred.h > pred.a ? "H" : pred.h < pred.a ? "A" : "D";
   const realOutcome = result.h > result.a ? "H" : result.h < result.a ? "A" : "D";
-  if (predOutcome === realOutcome) return { pts: 2, type: "outcome" };
-  return { pts: 0, type: "miss" };
+  if (predOutcome === realOutcome) return { pts: 2 + bonus, type: "outcome", bonus };
+  return { pts: 0, type: "miss", bonus: 0 };
 }
 
 function userRanking() {
@@ -308,7 +351,7 @@ function userRanking() {
       const result = APP.results[n];
       if (!result) return;
       total++;
-      const s = scorePrediction(pred, result);
+      const s = scorePrediction(pred, result, getMatch(parseInt(n)));
       if (!s) return;
       pts += s.pts;
       if (s.type === "exact") exact++;
@@ -446,7 +489,16 @@ function resolveKOSlot(slot) {
     if (!teams.home || !teams.away || !result) return null;
     if (result.h > result.a) return teams.home;
     if (result.a > result.h) return teams.away;
-    return null; // empate → no se puede determinar auto (penales)
+    // Empate a 90 min → revisar penales y luego alargue
+    if (result.home_pk !== null && result.home_pk !== undefined) {
+      if (result.home_pk > result.away_pk) return teams.home;
+      if (result.away_pk > result.home_pk) return teams.away;
+    }
+    if (result.home_et !== null && result.home_et !== undefined) {
+      if (result.home_et > result.away_et) return teams.home;
+      if (result.away_et > result.home_et) return teams.away;
+    }
+    return null;
   }
   if (slot.lose !== undefined) {
     const teams = resolveMatchTeams(slot.lose);
@@ -454,6 +506,15 @@ function resolveKOSlot(slot) {
     if (!teams.home || !teams.away || !result) return null;
     if (result.h > result.a) return teams.away;
     if (result.a > result.h) return teams.home;
+    // Empate a 90 min → el perdedor es el equipo que perdió penales/alargue
+    if (result.home_pk !== null && result.home_pk !== undefined) {
+      if (result.home_pk > result.away_pk) return teams.away;
+      if (result.away_pk > result.home_pk) return teams.home;
+    }
+    if (result.home_et !== null && result.home_et !== undefined) {
+      if (result.home_et > result.away_et) return teams.away;
+      if (result.away_et > result.home_et) return teams.home;
+    }
     return null;
   }
   return null;
@@ -576,7 +637,7 @@ function renderHome() {
           <button class="group-tile" data-group="${g}" onclick="navTo('group', {groupId: '${g}'})">
             <div>
               <div class="group-tile-label">GRUPO ${g}</div>
-              <div class="group-tile-flags">${teams.map(t => t.flag).join(" ")}</div>
+              <div class="group-tile-flags">${teams.map(t => flagImg(t.code)).join("")}</div>
             </div>
             <div class="group-tile-teams">${teams.map(t => t.name.toUpperCase()).join(" · ")}</div>
           </button>
@@ -644,7 +705,7 @@ function renderGroupMini(groupId) {
       ${standings.map((t, i) => `
         <div class="group-mini-row${i < 2 ? ' q' : ''}">
           <span class="gm-pos">${i + 1}</span>
-          <span class="gm-flag">${t.flag}</span>
+          <span class="gm-flag">${flagImg(t.code)}</span>
           <span class="gm-name">${t.name.length > 10 ? t.name.slice(0,10) + '…' : t.name}</span>
           <span class="gm-pts">${t.pts}</span>
         </div>
@@ -664,7 +725,7 @@ function renderBktMatch(n) {
   const teamRow = (team, won, score) => `
     <div class="bkt-t${won ? ' w' : ''}">
       ${team
-        ? `<span class="bkt-flag">${team.flag}</span><span class="bkt-name">${team.name.length > 11 ? team.name.slice(0,11) + '…' : team.name}</span>`
+        ? `<span class="bkt-flag">${flagImg(team.code)}</span><span class="bkt-name">${team.name.length > 11 ? team.name.slice(0,11) + '…' : team.name}</span>`
         : `<span class="bkt-tbd">—</span>`}
       ${score !== undefined ? `<span class="bkt-sc">${score}</span>` : ''}
     </div>`;
@@ -712,7 +773,7 @@ function renderGroup(groupId) {
       ${standings.map((t, i) => `
         <div class="standings-row ${i < 2 ? 'qual' : ''}">
           <div class="pos">${i + 1}</div>
-          <div class="team-name"><span class="flag">${t.flag}</span> ${t.name}</div>
+          <div class="team-name"><span class="flag">${flagImg(t.code)}</span> ${t.name}</div>
           <div class="stat">${t.pj}</div>
           <div class="stat">${t.g}</div>
           <div class="stat">${t.e}</div>
@@ -804,19 +865,20 @@ function matchCardHTML(m, opts = { showPred: true, showAdmin: false }) {
             <div>
               <div class="name">${home.name.toUpperCase()}${followsHome ? ' <span class="follow-star">★</span>' : ''}</div>
             </div>
-            <div class="flag">${home.flag}</div>
+            <div class="flag">${flagImg(home.code)}</div>
           </div>
         ` : `<div class="team-block home placeholder">${(m.placeholder || '').split(' vs ')[0] || '—'}</div>`}
 
         <div class="score-block">
           ${result
-            ? `<div class="score"><span>${result.h}</span><span class="sep">-</span><span>${result.a}</span></div>`
+            ? `<div class="score"><span>${result.h}</span><span class="sep">-</span><span>${result.a}</span></div>
+               ${result.home_et !== null ? `<div style="font-size:9px;color:var(--text-dim);margin-top:2px;text-align:center;font-family:'JetBrains Mono',monospace;line-height:1.5;">AET ${result.home_et}-${result.away_et}${result.home_pk !== null ? `<br>PEN ${result.home_pk}-${result.away_pk}` : ''}</div>` : ''}`
             : `<div class="vs">VS</div>`}
         </div>
 
         ${away ? `
           <div class="team-block away" onclick="navTo('team', {teamCode: '${away.code}'})">
-            <div class="flag">${away.flag}</div>
+            <div class="flag">${flagImg(away.code)}</div>
             <div>
               <div class="name">${away.name.toUpperCase()}${followsAway ? ' <span class="follow-star">★</span>' : ''}</div>
             </div>
@@ -855,19 +917,57 @@ function matchCardHTML(m, opts = { showPred: true, showAdmin: false }) {
               value="${userPred ? userPred.a : ''}" ${isLocked || !APP.currentUserId ? 'disabled' : ''}>
           </div>
           ${result && predScore
-            ? `<div class="pred-result-badge ${predScore.type}">+${predScore.pts} pt${predScore.pts !== 1 ? 's' : ''}</div>`
+            ? `<div class="pred-result-badge ${predScore.type}">+${predScore.pts} pt${predScore.pts !== 1 ? 's' : ''}${predScore.bonus ? ' ★' : ''}</div>`
             : `<button class="btn-pred" data-save-pred="${m.n}" ${isLocked || !APP.currentUserId ? 'disabled' : ''}>${userPred ? 'Editar' : 'Guardar'}</button>`}
+          ${isKOStage ? `
+            <div style="margin-top:8px;border-top:1px solid var(--line);padding-top:8px;">
+              <div style="font-size:10px;color:var(--text-dim);margin-bottom:6px;text-transform:uppercase;letter-spacing:0.05em;">¿Quién gana si hay penales?</div>
+              <div style="display:flex;gap:6px;">
+                <button class="btn-pk-winner ${userPred?.pk_winner === 'H' ? 'selected' : ''}"
+                  data-pk-match="${m.n}" data-pk-side="H"
+                  ${isLocked || !APP.currentUserId ? 'disabled' : ''}
+                  style="flex:1;padding:5px 4px;font-size:11px;border-radius:6px;border:1px solid var(--line);background:${userPred?.pk_winner === 'H' ? 'var(--red)' : 'var(--bg-app)'};color:${userPred?.pk_winner === 'H' ? '#fff' : 'var(--text)'};cursor:${isLocked || !APP.currentUserId ? 'default' : 'pointer'};">
+                  ${flagImg(home.code)} ${home.name}
+                </button>
+                <button class="btn-pk-winner ${userPred?.pk_winner === 'A' ? 'selected' : ''}"
+                  data-pk-match="${m.n}" data-pk-side="A"
+                  ${isLocked || !APP.currentUserId ? 'disabled' : ''}
+                  style="flex:1;padding:5px 4px;font-size:11px;border-radius:6px;border:1px solid var(--line);background:${userPred?.pk_winner === 'A' ? 'var(--red)' : 'var(--bg-app)'};color:${userPred?.pk_winner === 'A' ? '#fff' : 'var(--text)'};cursor:${isLocked || !APP.currentUserId ? 'default' : 'pointer'};">
+                  ${flagImg(away.code)} ${away.name}
+                </button>
+              </div>
+              ${result?.home_pk !== null && result?.home_pk !== undefined ? `
+                <div style="font-size:10px;color:var(--text-dim);margin-top:4px;text-align:center;">
+                  Ganó en penales: <strong>${result.home_pk > result.away_pk ? home.name : away.name}</strong>
+                  ${predScore?.bonus ? '<span style="color:var(--gold);"> ★ +1 bono</span>' : ''}
+                </div>` : ''}
+            </div>` : ''}
         </div>
       ` : ''}
 
       ${opts.showAdmin && APP.adminMode && home && away ? `
-        <div class="admin-result">
-          <label>ADMIN · Resultado:</label>
-          <input type="number" min="0" max="20" class="score-input" data-result="${m.n}" data-side="h" value="${result ? result.h : ''}">
-          <span style="color: var(--text-faint);">-</span>
-          <input type="number" min="0" max="20" class="score-input" data-result="${m.n}" data-side="a" value="${result ? result.a : ''}">
-          <button class="btn-pred" data-save-result="${m.n}">Guardar</button>
-          ${result ? `<button class="btn-pred" style="background: var(--text-dim);" data-clear-result="${m.n}">Borrar</button>` : ''}
+        <div class="admin-result" style="flex-direction:column;align-items:stretch;gap:6px;">
+          <label style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.05em;">ADMIN · Resultado 90'</label>
+          <div style="display:flex;align-items:center;gap:6px;">
+            <input type="number" min="0" max="20" class="score-input" data-result="${m.n}" data-side="h" value="${result ? result.h : ''}" style="width:48px;">
+            <span style="color:var(--text-faint);">-</span>
+            <input type="number" min="0" max="20" class="score-input" data-result="${m.n}" data-side="a" value="${result ? result.a : ''}" style="width:48px;">
+            <button class="btn-pred" data-save-result="${m.n}" style="flex:1;">Guardar</button>
+            ${result ? `<button class="btn-pred" style="background:var(--text-dim);" data-clear-result="${m.n}">Borrar</button>` : ''}
+          </div>
+          ${isKOStage ? `
+            <label style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.05em;color:var(--text-dim);">Alargue (si hubo)</label>
+            <div style="display:flex;align-items:center;gap:6px;">
+              <input type="number" min="0" max="20" class="score-input" data-result-et="${m.n}" data-side="h" value="${result?.home_et ?? ''}" placeholder="—" style="width:48px;">
+              <span style="color:var(--text-faint);">-</span>
+              <input type="number" min="0" max="20" class="score-input" data-result-et="${m.n}" data-side="a" value="${result?.away_et ?? ''}" placeholder="—" style="width:48px;">
+            </div>
+            <label style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.05em;color:var(--text-dim);">Penales (si hubo)</label>
+            <div style="display:flex;align-items:center;gap:6px;">
+              <input type="number" min="0" max="20" class="score-input" data-result-pk="${m.n}" data-side="h" value="${result?.home_pk ?? ''}" placeholder="—" style="width:48px;">
+              <span style="color:var(--text-faint);">-</span>
+              <input type="number" min="0" max="20" class="score-input" data-result-pk="${m.n}" data-side="a" value="${result?.away_pk ?? ''}" placeholder="—" style="width:48px;">
+            </div>` : ''}
         </div>
       ` : ''}
 
@@ -884,7 +984,7 @@ function matchCardHTML(m, opts = { showPred: true, showAdmin: false }) {
             </label>
             <div style="display:grid;grid-template-columns:1fr auto 1fr;gap:6px;align-items:center;">
               <div>
-                ${autoHome ? `<div style="font-size:10px;color:var(--text-dim);margin-bottom:2px;">Auto: ${TEAMS[autoHome]?.flag || ''} ${TEAMS[autoHome]?.name || autoHome}</div>` : ''}
+                ${autoHome ? `<div style="font-size:10px;color:var(--text-dim);margin-bottom:2px;">Auto: ${TEAMS[autoHome] ? flagImg(autoHome) : ''} ${TEAMS[autoHome]?.name || autoHome}</div>` : ''}
                 <select data-bracket="${m.n}" data-side="h" style="${selectStyle}">
                   <option value="">— Por definir —</option>
                   ${teamSelectOptions(resolved.home)}
@@ -892,7 +992,7 @@ function matchCardHTML(m, opts = { showPred: true, showAdmin: false }) {
               </div>
               <span style="color:var(--text-faint);font-size:12px;">vs</span>
               <div>
-                ${autoAway ? `<div style="font-size:10px;color:var(--text-dim);margin-bottom:2px;">Auto: ${TEAMS[autoAway]?.flag || ''} ${TEAMS[autoAway]?.name || autoAway}</div>` : ''}
+                ${autoAway ? `<div style="font-size:10px;color:var(--text-dim);margin-bottom:2px;">Auto: ${TEAMS[autoAway] ? flagImg(autoAway) : ''} ${TEAMS[autoAway]?.name || autoAway}</div>` : ''}
                 <select data-bracket="${m.n}" data-side="a" style="${selectStyle}">
                   <option value="">— Por definir —</option>
                   ${teamSelectOptions(resolved.away)}
@@ -926,6 +1026,19 @@ function attachMatchCardHandlers() {
       toast("Resultado borrado", "success");
       renderView(APP.currentView, APP.currentParams);
       try { await dbDeleteResult(n); } catch(e) { /* estado local ya actualizado */ }
+    });
+  });
+
+  document.querySelectorAll(".btn-pk-winner").forEach(btn => {
+    btn.addEventListener("click", () => {
+      const matchN = btn.dataset.pkMatch;
+      const zone = btn.closest(".pred-zone");
+      zone?.querySelectorAll(`.btn-pk-winner[data-pk-match="${matchN}"]`).forEach(b => {
+        const isThis = b === btn;
+        b.classList.toggle("selected", isThis && !b.classList.contains("selected"));
+        b.style.background = b.classList.contains("selected") ? "var(--red)" : "var(--bg-app)";
+        b.style.color      = b.classList.contains("selected") ? "#fff"        : "var(--text)";
+      });
     });
   });
 
@@ -969,7 +1082,6 @@ async function savePrediction(n, btn) {
   const m = getMatch(n);
   if (matchHasStarted(m)) { toast("El partido ya comenzó", "error"); return; }
 
-  // Busca los inputs dentro del mismo .pred-zone del botón pulsado
   const zone = btn.closest(".pred-zone");
   const hInput = zone?.querySelector(`input[data-pred="${n}"][data-side="h"]`);
   const aInput = zone?.querySelector(`input[data-pred="${n}"][data-side="a"]`);
@@ -980,16 +1092,18 @@ async function savePrediction(n, btn) {
     toast("Ingresa marcador válido", "error"); return;
   }
 
+  const pkSelected = zone?.querySelector(".btn-pk-winner.selected");
+  const pkWinner = pkSelected?.dataset?.pkSide ?? null;
+
   if (!APP.predictions[APP.currentUserId]) APP.predictions[APP.currentUserId] = {};
-  APP.predictions[APP.currentUserId][n] = { h, a };
+  APP.predictions[APP.currentUserId][n] = { h, a, pk_winner: pkWinner };
   save();
   toast(`Predicción ${h}-${a} guardada`, "success");
   renderView(APP.currentView, APP.currentParams);
-  try { await dbUpsertPrediction(APP.currentUserId, n, h, a); } catch(e) { /* estado local ya actualizado */ }
+  try { await dbUpsertPrediction(APP.currentUserId, n, h, a, pkWinner); } catch(e) { /* estado local ya actualizado */ }
 }
 
 async function saveResult(n, btn) {
-  // Busca los inputs dentro del mismo .admin-result del botón pulsado
   const zone = btn.closest(".admin-result");
   const hInput = zone?.querySelector(`input[data-result="${n}"][data-side="h"]`);
   const aInput = zone?.querySelector(`input[data-result="${n}"][data-side="a"]`);
@@ -1000,11 +1114,20 @@ async function saveResult(n, btn) {
     toast("Ingresa marcador válido", "error"); return;
   }
 
-  APP.results[n] = { h, a };
+  const etH = zone?.querySelector(`input[data-result-et="${n}"][data-side="h"]`);
+  const etA = zone?.querySelector(`input[data-result-et="${n}"][data-side="a"]`);
+  const pkH = zone?.querySelector(`input[data-result-pk="${n}"][data-side="h"]`);
+  const pkA = zone?.querySelector(`input[data-result-pk="${n}"][data-side="a"]`);
+  const homeEt = etH?.value !== '' && etH?.value !== undefined ? parseInt(etH.value) : null;
+  const awayEt = etA?.value !== '' && etA?.value !== undefined ? parseInt(etA.value) : null;
+  const homePk = pkH?.value !== '' && pkH?.value !== undefined ? parseInt(pkH.value) : null;
+  const awayPk = pkA?.value !== '' && pkA?.value !== undefined ? parseInt(pkA.value) : null;
+
+  APP.results[n] = { h, a, home_et: homeEt, away_et: awayEt, home_pk: homePk, away_pk: awayPk };
   save();
   toast(`Resultado #${n}: ${h}-${a} guardado`, "success");
   renderView(APP.currentView, APP.currentParams);
-  try { await dbUpsertResult(n, h, a); } catch(e) { /* estado local ya actualizado */ }
+  try { await dbUpsertResult(n, h, a, homeEt, awayEt, homePk, awayPk); } catch(e) { /* estado local ya actualizado */ }
 }
 
 // ====== CALENDARIO ======
@@ -1069,7 +1192,7 @@ function renderTeamsList(query) {
     const following = APP.following.includes(t.code);
     return `
       <div class="team-row" onclick="navTo('team', {teamCode: '${t.code}'})">
-        <div class="flag-lg">${t.flag}</div>
+        <div class="flag-lg">${flagImg(t.code)}</div>
         <div class="info">
           <div class="name">${t.name.toUpperCase()}</div>
           <div class="group-pill">Grupo ${t.group}</div>
@@ -1094,6 +1217,7 @@ function toggleFollow(code) {
     toast(`Ahora sigues a ${TEAMS[code].name}`, "success");
   }
   save();
+  updateNotificationSubscription();
   const searchInput = document.getElementById("team-search-input");
   const savedQuery = searchInput ? searchInput.value : "";
   renderView(APP.currentView, APP.currentParams);
@@ -1127,7 +1251,7 @@ function renderTeamDetail(teamCode) {
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="15 18 9 12 15 6"/></svg>
         Volver
       </button>
-      <div class="team-detail-flag">${team.flag}</div>
+      <div class="team-detail-flag">${flagImg(team.code)}</div>
       <div class="team-detail-name">${team.name.toUpperCase()}</div>
       <div class="team-detail-group">Grupo ${team.group} · Posición actual: ${teamPos}°</div>
       <button class="team-detail-follow ${following ? 'following' : ''}" onclick="toggleFollow('${teamCode}')">
@@ -1163,7 +1287,7 @@ function renderTeamDetail(teamCode) {
             <div class="route-result ${r.result}">${r.result}</div>
             <div class="route-detail">
               <div class="matchup">
-                ${rivalTeam ? `<span class="flag">${rivalTeam.flag}</span><span>${r.isHome ? 'vs' : '@'} ${rivalTeam.name}</span>`
+                ${rivalTeam ? `<span class="flag">${flagImg(rivalTeam.code)}</span><span>${r.isHome ? 'vs' : '@'} ${rivalTeam.name}</span>`
                   : `<span style="font-size: 11px; color: var(--text-dim);">${r.match.placeholder || 'Por definir'}</span>`}
                 <span class="score">${r.scoreText}</span>
               </div>
@@ -1184,7 +1308,38 @@ function renderRanking() {
   el.innerHTML = `
     <div class="users-view">
       <div class="section-title">RANKING</div>
-      <div class="section-sub">Pollita Mundial 2026</div>
+      <div class="section-sub">Polla Mundial 26</div>
+
+      <div class="prizes-section">
+        <div class="prizes-title">🏆 PREMIOS CASA ESTADIO</div>
+        <div class="prizes-grid">
+          <div class="prize-card">
+            <div class="prize-card-icon">🥉</div>
+            <div class="prize-card-body">
+              <div class="prize-phase">FASE DE GRUPOS</div>
+              <div class="prize-desc">Mejor ranking al cierre de la fase de grupos</div>
+            </div>
+            <div class="prize-value">Por definir</div>
+          </div>
+          <div class="prize-card">
+            <div class="prize-card-icon">🥈</div>
+            <div class="prize-card-body">
+              <div class="prize-phase">ELIMINATORIAS</div>
+              <div class="prize-desc">Mejor ranking en las rondas eliminatorias</div>
+            </div>
+            <div class="prize-value">Por definir</div>
+          </div>
+          <div class="prize-card prize-card--final">
+            <div class="prize-card-icon">🥇</div>
+            <div class="prize-card-body">
+              <div class="prize-phase">CAMPEÓN FINAL</div>
+              <div class="prize-desc">Mejor ranking al término del torneo</div>
+            </div>
+            <div class="prize-value">Por definir</div>
+          </div>
+        </div>
+        <p class="prizes-sponsor-note">Premios aportados por <a href="https://www.instagram.com/lacasaestadio/" target="_blank" rel="noopener">@lacasaestadio</a></p>
+      </div>
 
       <div class="user-add-card">
         <input type="text" id="new-user-name" placeholder="Nombre del jugador" maxlength="20">
@@ -1230,21 +1385,21 @@ function openPredictionsModal(userId) {
   const rows = playedMatches.map(m => {
     const pred  = userPreds[m.n];
     const result = APP.results[m.n];
-    const score  = pred ? scorePrediction(pred, result) : null;
+    const score  = pred ? scorePrediction(pred, result, m) : null;
     const resolved = resolveMatchTeams(m.n);
     const homeTeam = resolved.home ? TEAMS[resolved.home] : null;
     const awayTeam = resolved.away ? TEAMS[resolved.away] : null;
     const teamLabel = homeTeam && awayTeam
-      ? `${homeTeam.flag} ${homeTeam.name} vs ${awayTeam.flag} ${awayTeam.name}`
+      ? `${flagImg(homeTeam.code)} ${homeTeam.name} vs ${flagImg(awayTeam.code)} ${awayTeam.name}`
       : m.placeholder || `Partido #${m.n}`;
 
     let badgeHtml = '';
     if (!pred) {
       badgeHtml = `<span style="font-size:10px;color:var(--text-dim);font-family:'JetBrains Mono',monospace;">sin predicción</span>`;
     } else if (score?.type === 'exact') {
-      badgeHtml = `<span style="color:#4ade80;font-weight:700;">✓ ${pred.h}-${pred.a} · +5 pts</span>`;
+      badgeHtml = `<span style="color:#4ade80;font-weight:700;">✓ ${pred.h}-${pred.a} · +${score.pts} pts${score.bonus ? ' ★' : ''}</span>`;
     } else if (score?.type === 'outcome') {
-      badgeHtml = `<span style="color:var(--gold);font-weight:700;">✓ ${pred.h}-${pred.a} · +2 pts</span>`;
+      badgeHtml = `<span style="color:var(--gold);font-weight:700;">✓ ${pred.h}-${pred.a} · +${score.pts} pts${score.bonus ? ' ★' : ''}</span>`;
     } else {
       badgeHtml = `<span style="color:var(--red);">✗ ${pred.h}-${pred.a} · 0 pts</span>`;
     }
@@ -1256,7 +1411,7 @@ function openPredictionsModal(userId) {
           <div style="font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${teamLabel}</div>
         </div>
         <div style="text-align:right;flex-shrink:0;">
-          <div style="font-size:11px;color:var(--text-dim);margin-bottom:2px;">Resultado: <strong>${result.h}-${result.a}</strong></div>
+          <div style="font-size:11px;color:var(--text-dim);margin-bottom:2px;">Resultado: <strong>${result.h}-${result.a}</strong>${result.home_et !== null ? ` <span style="font-size:10px;">AET ${result.home_et}-${result.away_et}${result.home_pk !== null ? ` PEN ${result.home_pk}-${result.away_pk}` : ''}</span>` : ''}</div>
           <div style="font-size:12px;">${badgeHtml}</div>
         </div>
       </div>`;
@@ -1264,12 +1419,12 @@ function openPredictionsModal(userId) {
 
   const totalPts  = playedMatches.reduce((acc, m) => {
     const pred = userPreds[m.n];
-    const sc   = pred ? scorePrediction(pred, APP.results[m.n]) : null;
+    const sc   = pred ? scorePrediction(pred, APP.results[m.n], m) : null;
     return acc + (sc?.pts || 0);
   }, 0);
-  const exact   = playedMatches.filter(m => { const p = userPreds[m.n]; return p && scorePrediction(p, APP.results[m.n])?.type === 'exact'; }).length;
-  const outcome = playedMatches.filter(m => { const p = userPreds[m.n]; return p && scorePrediction(p, APP.results[m.n])?.type === 'outcome'; }).length;
-  const missed  = playedMatches.filter(m => { const p = userPreds[m.n]; return p && scorePrediction(p, APP.results[m.n])?.type === 'miss'; }).length;
+  const exact   = playedMatches.filter(m => { const p = userPreds[m.n]; return p && scorePrediction(p, APP.results[m.n], m)?.type === 'exact'; }).length;
+  const outcome = playedMatches.filter(m => { const p = userPreds[m.n]; return p && scorePrediction(p, APP.results[m.n], m)?.type === 'outcome'; }).length;
+  const missed  = playedMatches.filter(m => { const p = userPreds[m.n]; return p && scorePrediction(p, APP.results[m.n], m)?.type === 'miss'; }).length;
   const noPred  = playedMatches.filter(m => !userPreds[m.n]).length;
 
   const modalContent = document.getElementById("modal-content");
@@ -1561,9 +1716,9 @@ function renderSettings() {
             La pestaña <strong>Ranking</strong> muestra los puntos de todos los jugadores. Se actualiza en tiempo real cada vez que el administrador ingresa un resultado oficial.
           </div>
 
-          <div style="font-size:12px;font-weight:700;color:var(--red);margin-bottom:6px;text-transform:uppercase;letter-spacing:0.05em;">7. Seguir equipos</div>
+          <div style="font-size:12px;font-weight:700;color:var(--red);margin-bottom:6px;text-transform:uppercase;letter-spacing:0.05em;">7. Seguir equipos y notificaciones</div>
           <div style="font-size:12px;color:var(--text-soft);line-height:1.6;margin-bottom:12px;">
-            Ve a la pestaña <strong>Equipos</strong> y toca ⭐ junto a tu selección favorita. Aparecerá destacada en todos sus partidos.
+            Ve a la pestaña <strong>Equipos</strong> y toca ⭐ junto a tu selección favorita. Aparecerá destacada en todos sus partidos. Para recibir avisos 1 hora antes del partido y con el marcador final, activa las notificaciones en <strong>Ajustes → Notificaciones</strong>.
           </div>
 
           <div style="font-size:12px;font-weight:700;color:var(--red);margin-bottom:6px;text-transform:uppercase;letter-spacing:0.05em;">8. Instalar la app</div>
@@ -1599,12 +1754,32 @@ function renderSettings() {
             ? '<div style="font-size: 12px; color: var(--text-dim);">No sigues a ningún equipo aún</div>'
             : APP.following.map(code => `
               <button class="follow-btn following" onclick="toggleFollow('${code}')" style="font-size: 11px;">
-                ${TEAMS[code].flag} ${TEAMS[code].name} ✕
+                ${flagImg(code)} ${TEAMS[code].name} ✕
               </button>
             `).join("")
           }
         </div>
       </div>
+
+      ${(() => {
+        const supported = typeof Notification !== "undefined" && typeof PushManager !== "undefined";
+        const denied    = supported && Notification.permission === "denied";
+        const active    = !!localStorage.getItem(PUSH_KEY);
+        return `<div style="background: var(--bg-card); border: 1px solid var(--line); border-radius: 12px; padding: 14px; margin-bottom: 12px;">
+          <div style="font-weight: 700; font-size: 14px; margin-bottom: 4px;">🔔 Notificaciones</div>
+          <div style="font-size: 11px; color: var(--text-dim); margin-bottom: 10px;">
+            Aviso 1 hora antes del partido y resultado final para tus equipos seguidos.
+          </div>
+          ${!supported
+            ? '<div style="font-size:12px;color:var(--text-dim);">Tu navegador no soporta notificaciones push.</div>'
+            : denied
+              ? '<div style="font-size:12px;color:var(--text-dim);">Notificaciones bloqueadas. Habilítalas en los permisos de tu navegador.</div>'
+              : active
+                ? '<button class="btn-secondary" style="width:100%;" onclick="unsubscribeNotifications()">🔕 Desactivar notificaciones</button>'
+                : '<button class="btn-secondary" style="width:100%;" onclick="requestNotificationPermission()">🔔 Activar notificaciones</button>'
+          }
+        </div>`;
+      })()}
 
       <div style="background: var(--bg-card); border: 1px solid var(--line); border-radius: 12px; margin-bottom: 12px; overflow: hidden;">
         <button onclick="toggleRulesCard()" style="width:100%;display:flex;align-items:center;justify-content:space-between;padding:14px;background:none;border:none;cursor:pointer;color:inherit;">
@@ -1672,7 +1847,7 @@ function renderSettings() {
       </div>
 
       <div style="text-align: center; font-size: 10px; color: var(--text-faint); padding: 16px 0; font-family: 'JetBrains Mono', monospace; letter-spacing: 0.1em;">
-        Pollita Mundial 2026 · v1.0<br>
+        Polla Casa Estadio · v1.2<br>
         Horarios en hora Chile (CLT, UTC-4)
       </div>
     </div>
@@ -1827,6 +2002,79 @@ function dismissInstall() {
   document.getElementById("install-banner").classList.remove("show");
 }
 
+// ====== PUSH NOTIFICATIONS ======
+function isPushSupported() {
+  return "Notification" in window && "serviceWorker" in navigator && "PushManager" in window;
+}
+
+async function requestNotificationPermission() {
+  if (!isPushSupported()) {
+    toast("Tu navegador no soporta notificaciones push");
+    return;
+  }
+  const permission = await Notification.requestPermission();
+  if (permission !== "granted") {
+    toast("Permiso de notificaciones denegado");
+    renderSettings();
+    return;
+  }
+  await subscribeToNotifications();
+}
+
+async function subscribeToNotifications() {
+  try {
+    const reg = await navigator.serviceWorker.ready;
+    const subscription = await reg.pushManager.subscribe({
+      userVisibleOnly: true,
+      applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY)
+    });
+    const sub = subscription.toJSON();
+    if (sb) {
+      await sb.from("push_subscriptions").upsert(
+        { endpoint: sub.endpoint, p256dh: sub.keys.p256dh, auth: sub.keys.auth, following: APP.following },
+        { onConflict: "endpoint" }
+      );
+    }
+    localStorage.setItem(PUSH_KEY, "1");
+    toast("Notificaciones activadas", "success");
+    renderSettings();
+  } catch(e) {
+    console.error("Error al suscribirse a notificaciones:", e);
+    toast("No se pudieron activar las notificaciones");
+  }
+}
+
+async function unsubscribeNotifications() {
+  try {
+    const reg = await navigator.serviceWorker.ready;
+    const subscription = await reg.pushManager.getSubscription();
+    if (subscription) {
+      if (sb) await sb.from("push_subscriptions").delete().eq("endpoint", subscription.endpoint);
+      await subscription.unsubscribe();
+    }
+    localStorage.removeItem(PUSH_KEY);
+    toast("Notificaciones desactivadas");
+    renderSettings();
+  } catch(e) {
+    console.error("Error al desactivar notificaciones:", e);
+    toast("Error al desactivar notificaciones");
+  }
+}
+
+async function updateNotificationSubscription() {
+  if (!localStorage.getItem(PUSH_KEY) || !sb) return;
+  try {
+    const reg = await navigator.serviceWorker.ready;
+    const subscription = await reg.pushManager.getSubscription();
+    if (!subscription) return;
+    await sb.from("push_subscriptions")
+      .update({ following: APP.following })
+      .eq("endpoint", subscription.endpoint);
+  } catch(e) {
+    console.warn("No se pudo actualizar suscripción push:", e);
+  }
+}
+
 // ====== SERVICE WORKER ======
 if ("serviceWorker" in navigator) {
   window.addEventListener("load", () => {
@@ -1878,11 +2126,13 @@ async function init() {
   }
 
   initSupabase();
-  if (sb) subscribeAuth(); // detecta expiración de sesión admin en tiempo real
   await dbLoad();
   navTo("home", {}, false);
   updateUserPill();
-  if (sb) subscribeRealtime();
+  if (sb) {
+    subscribeAuth();     // después de dbLoad para que el primer disparo de onAuthStateChange no pise following
+    subscribeRealtime();
+  }
 }
 
 window.addEventListener("DOMContentLoaded", init);
@@ -1903,4 +2153,6 @@ window.installApp = installApp;
 window.dismissInstall = dismissInstall;
 window.saveBracket = saveBracket;
 window.clearBracket = clearBracket;
+window.requestNotificationPermission = requestNotificationPermission;
+window.unsubscribeNotifications = unsubscribeNotifications;
 

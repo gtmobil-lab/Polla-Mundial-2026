@@ -1,0 +1,11 @@
+# Claude Code config
+.claude/
+
+# Archivos internos de desarrollo (no van al repo público)
+INSTRUCCIONES.md
+PROYECTO_RESUMEN.md
+supabase-setup.sql
+
+# OS
+.DS_Store
+Thumbs.db

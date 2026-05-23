@@ -6,9 +6,21 @@
 <meta name="theme-color" content="#0a0a0a">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<meta name="apple-mobile-web-app-title" content="Mundial 2026">
+<meta name="apple-mobile-web-app-title" content="Polla CE">
 <meta name="mobile-web-app-capable" content="yes">
-<title>Pollita Mundial 2026</title>
+<title>Polla Casa Estadio — Mundial 2026</title>
+<!-- Open Graph / WhatsApp / Facebook / Instagram -->
+<meta property="og:type"         content="website">
+<meta property="og:url"          content="https://polla-mundial-2026-sigma.vercel.app/">
+<meta property="og:title"        content="Polla Casa Estadio — Mundial 2026">
+<meta property="og:description"  content="Predice los 104 partidos del Mundial 2026 y compite con tus amigos. Auspicia La Casa Estadio, el bar de fútbol en Ñuñoa.">
+<meta property="og:image"        content="https://polla-mundial-2026-sigma.vercel.app/sponsor-logo.jpg">
+<meta name="twitter:card"        content="summary_large_image">
+<meta name="twitter:url"         content="https://polla-mundial-2026-sigma.vercel.app/">
+<meta name="twitter:title"       content="Polla Casa Estadio — Mundial 2026">
+<meta name="twitter:description" content="Predice los 104 partidos del Mundial 2026 y compite con tus amigos. Auspicia La Casa Estadio.">
+<meta name="twitter:image"       content="https://polla-mundial-2026-sigma.vercel.app/sponsor-logo.jpg">
+<link rel="canonical"            href="https://polla-mundial-2026-sigma.vercel.app/">
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="icon-192.png">
 <link rel="icon" type="image/png" href="icon-192.png">
@@ -22,7 +34,7 @@
 <!-- HEADER -->
 <header class="app-header">
   <div class="brand">
-    <div class="brand-title">POLLITA <span class="red">MUNDIAL</span> 26</div>
+    <div class="brand-title">POLLA <span class="red">CASA</span> ESTADIO</div>
     <div class="brand-sub">USA · MEX · CAN</div>
   </div>
   <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px;">
@@ -33,6 +45,40 @@
     <span id="sync-badge" class="sync-badge offline" style="display:none;">○ Sin conexión</span>
   </div>
 </header>
+
+<!-- SPONSOR BANNER — Casa Estadio (auspiciador oficial) -->
+<div class="sponsor-bar">
+  <img class="sponsor-logo" src="sponsor-logo.jpg" alt="Casa Estadio" onerror="this.style.display='none'">
+  <div class="sponsor-text">
+    <span class="sponsor-label">Auspiciador oficial</span>
+    <span class="sponsor-name">LA CASA ESTADIO</span>
+  </div>
+  <div class="sponsor-socials">
+    <a class="sponsor-social-link" href="https://www.instagram.com/lacasaestadio/" target="_blank" rel="noopener noreferrer" aria-label="Instagram" data-network="instagram">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <rect x="2" y="2" width="20" height="20" rx="5" ry="5"/>
+        <circle cx="12" cy="12" r="4"/>
+        <circle cx="17.5" cy="6.5" r="1.5" fill="currentColor" stroke="none"/>
+      </svg>
+    </a>
+    <a class="sponsor-social-link" href="https://www.facebook.com/lacasaestadio/" target="_blank" rel="noopener noreferrer" aria-label="Facebook" data-network="facebook">
+      <svg viewBox="0 0 24 24" fill="currentColor">
+        <path d="M18 2h-3a5 5 0 0 0-5 5v3H7v4h3v8h4v-8h3l1-4h-4V7a1 1 0 0 1 1-1h3z"/>
+      </svg>
+    </a>
+    <a class="sponsor-social-link" href="https://twitter.com/lacasaestadio" target="_blank" rel="noopener noreferrer" aria-label="Twitter / X" data-network="twitter">
+      <svg viewBox="0 0 24 24" fill="currentColor">
+        <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/>
+      </svg>
+    </a>
+    <a class="sponsor-social-link" href="https://www.youtube.com/channel/UCnYjdf0bvkepLFiczdQPkRQ" target="_blank" rel="noopener noreferrer" aria-label="YouTube" data-network="youtube">
+      <svg viewBox="0 0 24 24" fill="currentColor">
+        <path d="M22.54 6.42a2.78 2.78 0 0 0-1.95-1.96C18.88 4 12 4 12 4s-6.88 0-8.59.46a2.78 2.78 0 0 0-1.95 1.96A29 29 0 0 0 1 12a29 29 0 0 0 .46 5.58A2.78 2.78 0 0 0 3.41 19.6C5.12 20 12 20 12 20s6.88 0 8.59-.46a2.78 2.78 0 0 0 1.95-1.95A29 29 0 0 0 23 12a29 29 0 0 0-.46-5.58z"/>
+        <polygon points="9.75 15.02 15.5 12 9.75 8.98 9.75 15.02" fill="#0f0f0f"/>
+      </svg>
+    </a>
+  </div>
+</div>
 
 <!-- MAIN -->
 <main>
@@ -101,30 +147,37 @@
   <div class="terms-box">
     <div class="terms-header">
       <div class="terms-logo">⚽</div>
-      <div class="terms-title">POLLITA<br><span style="color:var(--red)">MUNDIAL</span> 26</div>
+      <div class="terms-title">POLLA<br><span style="color:var(--red)">CASA</span> ESTADIO</div>
     </div>
     <div class="terms-body">
       <h2>Términos y Condiciones</h2>
       <div class="terms-scroll">
         <p><strong>NATURALEZA DEL SERVICIO</strong><br>
-        Esta aplicación es una herramienta de entretenimiento recreativo para el seguimiento del torneo FIFA World Cup 2026. Está destinada exclusivamente para uso personal entre grupos de amigos o familiares.</p>
+        Esta aplicación es una herramienta de entretenimiento recreativo para el seguimiento y la predicción de partidos del torneo FIFA World Cup 2026. Está destinada exclusivamente para uso personal entre grupos de amigos o familiares. Para aprender a usarla, consulta el <strong>Manual de Instrucciones</strong> disponible en la sección Ajustes de la app.</p>
+
+        <p><strong>FUNCIONAMIENTO DE LA POLLA</strong><br>
+        Cada jugador crea su perfil, predice el marcador de los partidos antes de que comiencen y acumula puntos según el sistema de la aplicación: <strong>5 puntos</strong> por resultado exacto (marcador preciso), <strong>2 puntos</strong> por acertar el ganador o el empate sin marcador exacto, y <strong>0 puntos</strong> en caso de fallo. Las predicciones se cierran automáticamente al inicio de cada partido y no pueden modificarse una vez comenzado. Los resultados y el ranking se sincronizan en tiempo real entre todos los participantes a través de los servidores de Supabase. El administrador de la polla es el único responsable de ingresar los resultados oficiales.</p>
+
+        <p><strong>AUSPICIADOR OFICIAL</strong><br>
+        Esta aplicación cuenta con el auspicio oficial de <strong>Casa Estadio</strong> (<a href="https://www.instagram.com/lacasaestadio/" target="_blank" rel="noopener" style="color:var(--gold);">@lacasaestadio</a>), el bar de fútbol ubicado en Ricardo Lyon 3387, Ñuñoa, Santiago. La participación de Casa Estadio se limita al patrocinio del evento recreativo; Casa Estadio no gestiona ni es responsable del funcionamiento técnico de la aplicación.</p>
+
+        <p><strong>PREMIOS Y ACUERDOS ECONÓMICOS</strong><br>
+        Los premios indicados en la sección Ranking son aportados por Casa Estadio de forma voluntaria y su entrega está sujeta a disponibilidad y condiciones definidas por el auspiciador. Esta aplicación no gestiona, garantiza ni intermedia ningún tipo de transacción económica. Cualquier acuerdo adicional entre participantes (apuestas, rifas u otras formas de incentivo) es de exclusiva responsabilidad de las partes involucradas y no tiene vínculo legal con esta aplicación ni con Casa Estadio.</p>
 
         <p><strong>RESPONSABILIDAD</strong><br>
         La aplicación no garantiza disponibilidad continua del servicio. El desarrollador no se hace responsable por interrupciones, pérdida de datos, errores en los resultados mostrados ni por ningún perjuicio derivado del uso de la aplicación.</p>
-
-        <p><strong>ACUERDOS ECONÓMICOS</strong><br>
-        Cualquier acuerdo económico entre participantes (premios, apuestas, rifas u otras formas de incentivo) es de exclusiva responsabilidad de las partes involucradas. Esta aplicación no gestiona ni intermedia ningún tipo de transacción económica y no tiene vínculo legal con dichos acuerdos.</p>
 
         <p><strong>DATOS Y PRIVACIDAD</strong><br>
         Los nombres de jugadores y predicciones ingresados se almacenan en servidores de Supabase (supabase.com) y serán visibles para todos los participantes del grupo. No se recopilan datos sensibles (correos, contraseñas, datos de pago) ni se comparten con terceros fuera de Supabase.</p>
 
         <p><strong>DISPONIBILIDAD DEL SERVICIO</strong><br>
-        El servicio depende de plataformas externas (Supabase, Vercel). La app incluye un modo offline con datos almacenados localmente en el dispositivo como respaldo.</p>
+        <!-- DOMAIN: reemplazar URL cuando se active el dominio .cl -->
+        El servicio está disponible en el dominio oficial del evento y depende de plataformas externas (Supabase). La app incluye un modo offline con datos almacenados localmente en el dispositivo como respaldo.</p>
 
         <p><strong>MODIFICACIONES</strong><br>
         Estos términos pueden actualizarse. Se solicitará nueva aceptación al detectar una versión actualizada.</p>
 
-        <p class="terms-version">Versión 1.0 · Junio 2026</p>
+        <p class="terms-version">Versión 2.1 · Mayo 2026</p>
       </div>
 
       <label class="terms-check">

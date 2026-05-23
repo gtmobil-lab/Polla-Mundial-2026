@@ -1,7 +1,7 @@
 {
-  "name": "Pollita Mundial 2026",
-  "short_name": "Mundial 26",
-  "description": "Fixture completo del Mundial FIFA 2026 con sistema de predicciones y ranking",
+  "name": "Polla Casa Estadio",
+  "short_name": "Polla CE",
+  "description": "Predice los 104 partidos del Mundial 2026 y compite con tus amigos. Auspicia La Casa Estadio.",
   "start_url": "./index.html",
   "scope": "./",
   "display": "standalone",
