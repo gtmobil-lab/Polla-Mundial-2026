@@ -1,7 +1,7 @@
 {
-  "name": "Polla Casa Estadio",
-  "short_name": "Polla CE",
-  "description": "Predice los 104 partidos del Mundial 2026 y compite con tus amigos. Auspicia La Casa Estadio.",
+  "name": "Polla Mundial 2026",
+  "short_name": "Polla MX26",
+  "description": "Predice los 104 partidos del Mundial 2026 y compite con tus amigos.",
   "start_url": "./index.html",
   "scope": "./",
   "display": "standalone",

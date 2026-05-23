@@ -1,6 +1,6 @@
 // Service Worker - Pollita Mundial 2026
 // IMPORTANTE: Bumpar CACHE_VERSION con cada deploy significativo
-const CACHE_VERSION = "v5";
+const CACHE_VERSION = "v6";
 const CACHE_NAME = "mundial2026-" + CACHE_VERSION;
 
 // Assets estáticos: cache-first (no cambian entre deploys)
@@ -97,7 +97,7 @@ self.addEventListener("fetch", event => {
 self.addEventListener("push", event => {
   const data = event.data ? event.data.json() : {};
   event.waitUntil(
-    self.registration.showNotification(data.title || "Polla Casa Estadio", {
+    self.registration.showNotification(data.title || "Polla Mundial 2026", {
       body:  data.body  || "",
       icon:  "./icon-192.png",
       badge: "./icon-192.png",
