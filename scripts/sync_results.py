@@ -20,7 +20,14 @@ import json
 import os
 import sys
 import requests
-from datetime import datetime, timezone, date
+from datetime import datetime, timezone, timedelta, date
+
+CLT = timezone(timedelta(hours=-4))  # Chile Standard Time (sin horario de verano en jun-jul)
+
+def utc_to_clt_date(utc_date_str):
+    """Convierte utcDate de la API (UTC) a fecha CLT para buscar en el FIXTURE."""
+    dt = datetime.fromisoformat(utc_date_str.replace("Z", "+00:00"))
+    return dt.astimezone(CLT).strftime("%Y-%m-%d")
 from supabase import create_client
 
 try:
@@ -306,7 +313,7 @@ def main():
         status     = match.get("status")
         home_tla   = match.get("homeTeam", {}).get("tla", "")
         away_tla   = match.get("awayTeam", {}).get("tla", "")
-        match_date = match.get("utcDate", "")[:10]
+        match_date = utc_to_clt_date(match.get("utcDate", ""))
         match_n    = find_match_n(home_tla, away_tla, match_date)
 
         if match_n is None:
