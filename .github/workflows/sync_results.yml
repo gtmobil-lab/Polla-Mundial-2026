@@ -6,7 +6,7 @@ on:
   workflow_dispatch:          # disparo manual desde GitHub Actions
 
 env:
-  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "1"
 
 jobs:
   sync:
