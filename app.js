@@ -636,7 +636,7 @@ function renderHome() {
 
   el.innerHTML = `
     <div class="hero">
-      <div class="hero-title">MUNDIAL<br>FIFA 2026</div>
+      <div class="hero-title">CAMPEONATO<br>GLOBAL 2026</div>
       <div class="hero-sub">USA · Canadá · México · 11 jun → 19 jul</div>
       <div class="hero-meta">
         <div class="hero-stat">
@@ -1812,7 +1812,7 @@ function renderSettings() {
         </button>
         <div id="rules-card-body" style="display:none;padding:0 14px 14px;">
 
-          <div style="font-size:11px;color:var(--text-dim);margin-bottom:12px;">FIFA World Cup 2026™ · Estructura y Formato Oficial</div>
+          <div style="font-size:11px;color:var(--text-dim);margin-bottom:12px;">Campeonato Global 2026 · Estructura y Formato Oficial</div>
 
           <div style="font-size:12px;font-weight:700;color:var(--red);margin-bottom:6px;text-transform:uppercase;letter-spacing:0.05em;">1. Composición</div>
           <div style="font-size:12px;color:var(--text-soft);line-height:1.6;margin-bottom:12px;">
