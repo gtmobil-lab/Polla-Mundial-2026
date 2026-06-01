@@ -189,9 +189,9 @@ def upsert_result(sb, match_n, scores, status):
     }
     result = sb.table("results").upsert(payload, on_conflict="match_n").execute()
     label = "✅ FINAL" if status == "FINISHED" else "🟡 EN JUEGO"
-    print(f"  {label} #{match_n}: {scores['h']}-{scores['a']}"
-          f"{f' AET {scores[\"home_et\"]}-{scores[\"away_et\"]}' if scores['home_et'] is not None else ''}"
-          f"{f' PEN {scores[\"home_pk\"]}-{scores[\"away_pk\"]}' if scores['home_pk'] is not None else ''}")
+    aet = f" AET {scores['home_et']}-{scores['away_et']}" if scores['home_et'] is not None else ""
+    pen = f" PEN {scores['home_pk']}-{scores['away_pk']}" if scores['home_pk'] is not None else ""
+    print(f"  {label} #{match_n}: {scores['h']}-{scores['a']}{aet}{pen}")
     return result
 
 # ── Notificaciones Push ───────────────────────────────────────────────────────
