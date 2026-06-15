@@ -59,8 +59,24 @@ TEAM_MAP = {
     "ARG": "ARG", "ALG": "ALG", "AUT": "AUT", "JOR": "JOR",
     "POR": "POR", "COD": "COD", "UZB": "UZB", "COL": "COL",
     "ENG": "ENG", "CRO": "CRO", "GHA": "GHA", "PAN": "PAN",
+    # Aliases ISO 3166-1 alpha-3 → código FIFA de la app.
+    # football-data.org devuelve el TLA FIFA para casi todos los equipos, pero en
+    # algunos usa el código ISO (ej. Uruguay llega como "URY", no "URU"), lo que
+    # hacía que el partido NO se mapeara y el resultado nunca se sincronizara.
+    # Se cubren todas las selecciones cuyo ISO difiere del código FIFA.
+    "URY": "URU",  # Uruguay (bug confirmado en KSA vs URY, 2026-06-15)
+    "ZAF": "RSA",  # Sudáfrica
+    "CHE": "SUI",  # Suiza
+    "HTI": "HAI",  # Haití
+    "PRY": "PAR",  # Paraguay
+    "DEU": "GER",  # Alemania
+    "NLD": "NED",  # Países Bajos
+    "SAU": "KSA",  # Arabia Saudita
+    "DZA": "ALG",  # Argelia
+    "PRT": "POR",  # Portugal
+    "HRV": "CRO",  # Croacia
     # Variantes alternativas que puede usar la API
-    "GHA": "GHA", "CRC": "CRC", "SVN": "SVN", "DRC": "COD",
+    "CRC": "CRC", "SVN": "SVN", "DRC": "COD",
     "SCT": "SCO", "WAL": "WAL",
 }
 
