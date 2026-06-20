@@ -121,6 +121,34 @@ FIXTURE = {
     ("JOR","ARG","2026-06-27"):71, ("ALG","AUT","2026-06-27"):72,
 }
 
+# Fixture fase eliminatoria: (fecha_CLT, hora_CLT) → match_n
+# Los equipos no se conocen hasta que termine la fase de grupos,
+# así que mapeamos por (fecha, hora) que son únicas en toda la KO.
+KO_FIXTURE = {
+    # Dieciseisavos (R32)
+    ("2026-06-28", "15:00"): 73,
+    ("2026-06-29", "13:00"): 76, ("2026-06-29", "16:30"): 74, ("2026-06-29", "21:00"): 75,
+    ("2026-06-30", "13:00"): 78, ("2026-06-30", "17:00"): 77, ("2026-06-30", "21:00"): 79,
+    ("2026-07-01", "12:00"): 80, ("2026-07-01", "16:00"): 82, ("2026-07-01", "20:00"): 81,
+    ("2026-07-02", "15:00"): 84, ("2026-07-02", "19:00"): 83, ("2026-07-02", "23:00"): 85,
+    ("2026-07-03", "14:00"): 88, ("2026-07-03", "18:00"): 86, ("2026-07-03", "21:30"): 87,
+    # Octavos (R16)
+    ("2026-07-04", "13:00"): 90, ("2026-07-04", "17:00"): 89,
+    ("2026-07-05", "16:00"): 91, ("2026-07-05", "20:00"): 92,
+    ("2026-07-06", "15:00"): 93, ("2026-07-06", "20:00"): 94,
+    ("2026-07-07", "12:00"): 95, ("2026-07-07", "16:00"): 96,
+    # Cuartos (QF)
+    ("2026-07-09", "16:00"): 97,
+    ("2026-07-10", "15:00"): 98,
+    ("2026-07-11", "17:00"): 99, ("2026-07-11", "21:00"): 100,
+    # Semifinales
+    ("2026-07-14", "15:00"): 101,
+    ("2026-07-15", "15:00"): 102,
+    # 3er puesto y Final
+    ("2026-07-18", "17:00"): 103,
+    ("2026-07-19", "15:00"): 104,
+}
+
 def get_env(key):
     val = os.environ.get(key)
     if not val:
@@ -150,12 +178,20 @@ def fetch_live_matches():
 def normalize_tla(tla):
     return TEAM_MAP.get(tla, tla)
 
-def find_match_n(home_tla, away_tla, match_date_str):
+def find_match_n(home_tla, away_tla, match_date_str, utc_date_str=""):
     """Busca el número de partido en el fixture de la app."""
     h = normalize_tla(home_tla)
     a = normalize_tla(away_tla)
-    key = (h, a, match_date_str)
-    return FIXTURE.get(key)
+    # Fase de grupos: buscar por (home, away, fecha)
+    n = FIXTURE.get((h, a, match_date_str))
+    if n is not None:
+        return n
+    # Fase KO: los equipos no se conocen de antemano → buscar por (fecha, hora) CLT
+    if utc_date_str:
+        dt_clt   = datetime.fromisoformat(utc_date_str.replace("Z", "+00:00")).astimezone(CLT)
+        clt_hour = dt_clt.strftime("%H:%M")
+        return KO_FIXTURE.get((match_date_str, clt_hour))
+    return None
 
 def parse_score(match):
     """
@@ -329,8 +365,9 @@ def main():
         status     = match.get("status")
         home_tla   = match.get("homeTeam", {}).get("tla", "")
         away_tla   = match.get("awayTeam", {}).get("tla", "")
-        match_date = utc_to_clt_date(match.get("utcDate", ""))
-        match_n    = find_match_n(home_tla, away_tla, match_date)
+        utc_date   = match.get("utcDate", "")
+        match_date = utc_to_clt_date(utc_date)
+        match_n    = find_match_n(home_tla, away_tla, match_date, utc_date)
 
         if match_n is None:
             print(f"  ⚠️  No mapeado: {home_tla} vs {away_tla} ({match_date}) — status:{status}")
